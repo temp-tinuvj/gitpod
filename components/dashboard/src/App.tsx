@@ -2,6 +2,7 @@ import React, { Suspense, useContext } from 'react';
 import Menu from './components/Menu';
 import { BrowserRouter, Route, Switch } from "react-router-dom";
 import { Workspaces } from './workspaces/Workspaces';
+import { CreateWorkspace } from './workspaces/CreateWorkspace';
 import { ServiceContext } from './service/service';
 import { Login } from './Login';
 
@@ -18,6 +19,12 @@ function App() {
   if (!ctx.user) {
     return (
       <Login/>
+    );
+  }
+  const contextUrl = window.location.hash.replace(/^[#/]+/, '');
+  if (contextUrl !== '') {
+    return (
+      <CreateWorkspace contextUrl={contextUrl} gitpodService={ctx.service}/>
     );
   }
   return (
