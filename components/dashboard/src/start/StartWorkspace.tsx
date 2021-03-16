@@ -34,6 +34,7 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       const setStateEventListener = (event: MessageEvent) => {
         if (event.data.type === 'setState' && 'state' in event.data && typeof event.data['state'] === 'object') {
           // This seems to only set ideFrontendFailureCause
+          alert('setState: ' + JSON.stringify(event, null, 2));
           this.setState(event.data.state);
         }
       }
@@ -41,14 +42,15 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       this.toDispose.push({
         dispose: () => window.removeEventListener('message', setStateEventListener)
       });
+      // this.setState({ inTheiaAlready: true }); ?
     }
 
+    // this.ensureWorkspaceInfo({ force: false }); ?
     try {
       this.toDispose.push(this.props.gitpodService.registerClient(this));
     } catch (error) {
       this.setState({ error });
     }
-
     this.startWorkspace();
   }
 
@@ -77,7 +79,7 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
         this.redirectTo(result.workspaceURL);
         return;
       }
-      this.setState({ startedInstanceId: result.instanceID });
+      this.setState({ startedInstanceId: result.instanceID /* , errorMessage: undefined, errorCode: undefined, errorData: undefined */ });
       // Explicitly query state to guarantee we get at least one update
       // (needed for already started workspaces, and not hanging in 'Starting ...' for too long)
       this.props.gitpodService.server.getWorkspace(workspaceId).then(ws => {
@@ -96,9 +98,15 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
   async onInstanceUpdate(workspaceInstance: WorkspaceInstance) {
     const startedInstanceId = this.state?.startedInstanceId;
     if (workspaceInstance.workspaceId !== this.props.workspaceId || startedInstanceId !== workspaceInstance.id) {
+      // Can this even happen?
+      alert(workspaceInstance.workspaceId + ' ' + this.props.workspaceId + ' / ' + startedInstanceId + ' ' + workspaceInstance.id);
+      // sapphire-puma-2d0boxgd amber-marmot-rd2v0rg1 / 577e212c-23fd-4797-a864-9664015bb1a1 b903412b-d194-492a-9c2c-90b8a1f7f6df
+      // amber-marmot-rd2v0rg1 amber-marmot-rd2v0rg1 / undefined 577e212c-23fd-4797-a864-9664015bb1a1
+      // white-boa-yth74n75 blush-dog-myqe8ip3 / 118d1435-9533-4c7c-8b99-fb5ca6f0f5a4 9a15ecde-29c4-44da-8f42-66c3d33df062
       return;
     }
 
+    // await this.ensureWorkspaceInfo({ force: false });
     await this.ensureWorkspaceAuth(workspaceInstance.id);
 
     // redirect to workspaceURL if we are not yet running in an iframe
@@ -112,7 +120,7 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       this.props.gitpodService.server.watchWorkspaceImageBuildLogs(workspaceInstance.workspaceId);
     }
 
-    this.setState({ workspaceInstance });
+    this.setState({ workspaceInstance /* , errorMessage: workspaceInstance.status.conditions.failed, errorCode: undefined */ });
   }
 
   async ensureWorkspaceAuth(instanceID: string) {
@@ -132,6 +140,7 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
   }
 
   redirectTo(url: string) {
+    // am I running in Iframe?
     if (this.runsInIFrame()) {
         window.parent.postMessage({ type: 'relocate', url }, '*');
     } else {
@@ -164,6 +173,13 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       // some space within the cluster. If for example the cluster needs to scale up to accomodate the
       // workspace, the workspace will be in Pending state until that happened.
       case "pending":
+        // if (this.isPrebuilt) {
+        //     this.process.stages['restoring-prebuild'].expectedTime = 30 * 1000;
+        // } else {
+        //     // remove RestoringPrebuild phase to prevent stray stage when not starting from a prebuild
+        //     delete this.process.stages['restoring-prebuild'];
+        // }
+        // this.process.startProcess();
         phase = StartPhase.Preparing;
         statusMessage = <p className="text-base text-gray-400">Allocating Resources …</p>;
         break;
@@ -179,6 +195,26 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       // Initializing is the phase in which the workspace is executing the appropriate workspace initializer (e.g. Git
       // clone or backup download). After this phase one can expect the workspace to either be Running or Failed.
       case "initializing":
+        // this.process.startProcess();
+        // if (this.isPrebuilt) {
+        //     // for good measure: try and start the process just in case we missed the previous events. startProcess is idempotent.
+        //     this.process.startProcess();
+        //     setTimeout(() => {
+        //         this.process.setStage('restoring-prebuild');
+        //         // tslint:disable-next-line:no-shadowed-variable
+        //         const workspaceInstance = this.state.workspaceInstance;
+        //         if (workspaceInstance) {
+        //             (workspaceInstance.status.phase as (WorkspaceInstanceStatus | 'restoring-prebuild')) = 'restoring-prebuild';
+        //             this.setState({ workspaceInstance });
+        //         }
+        //         // tslint:disable-next-line:align
+        //     }, this.process.stages['initializing'].expectedTime);
+        //     if (workspaceInstance && workspaceInstance.status.phase === 'initializing'
+        //         && this.state.workspaceInstance && this.state.workspaceInstance.status.phase as any === 'restoring-prebuild') {
+        //         // we're already in the "fake" restoring-prebuild phase - don't fall back to StartingIDE
+        //         return;
+        //     }
+        // }
         phase = StartPhase.Starting;
         statusMessage = <p className="text-base text-gray-400">Cloning Repository …</p>; // TODO Loading Prebuild ...
         break;
@@ -186,6 +222,9 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
       // Running means the workspace is able to actively perform work, either by serving a user through Theia,
       // or as a headless workspace.
       case "running":
+        // if (this.isHeadless) {
+        //     this.props.service.server.watchHeadlessWorkspaceLogs(workspaceInstance.workspaceId);
+        // }
         phase = StartPhase.Running;
         statusMessage = <p className="text-base text-gray-400">Opening IDE …</p>;
         break;
@@ -204,12 +243,21 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
 
       // Stopped means the workspace ended regularly because it was shut down.
       case "stopped":
+        // if (this.isHeadless && this.workspace) {
+        //     const contextUrl = this.workspace.contextURL.replace('prebuild/', '')!;
+        //     this.redirectTo(new GitpodHostUrl(window.location.toString()).withContext(contextUrl).toString());
+        // }
         statusMessage = <p className="text-base text-gray-400">Stopped</p>;
         break;
     }
 
+    // TODO: https://github.com/gitpod-io/gitpod/blob/bd92761635e9021bf8893b5b6850a2f4f202d3f7/components/dashboard/src/components/start-workspace.tsx#L400-L491
     return <StartPage phase={phase}>
       {statusMessage}
+      <pre className="mt-10 text-gray-200">startedInstanceId: {JSON.stringify(this.state?.startedInstanceId, null, 2)}</pre>
+      <pre className="text-gray-200">contextUrl: {JSON.stringify(this.state?.contextUrl, null, 2)}</pre>
+      <pre className="text-gray-200">error: {JSON.stringify(this.state?.error, null, 2)}</pre>
+      <pre className="text-gray-200">ideFrontendFailureCause: {JSON.stringify(this.state?.ideFrontendFailureCause, null, 2)}</pre>
     </StartPage>;
   }
 }

@@ -40,7 +40,6 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
       });
       if (result.workspaceURL) {
         window.location.href = result.workspaceURL;
-        return;
       }
       this.setState({ result });
     } catch (error) {
@@ -64,10 +63,23 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
           </div>;
           break;
         case ErrorCodes.NOT_FOUND:
+          // TODO: https://github.com/gitpod-io/gitpod/blob/bd92761635e9021bf8893b5b6850a2f4f202d3f7/components/dashboard/src/components/show-not-found-error.tsx#L22
           statusMessage = <div className="text-center">
             <p className="text-base text-red">Not found: {contextUrl}</p>
           </div>;
           break;
+        /* TODO:
+        if (code === ErrorCodes.SETUP_REQUIRED) {
+            return <ApplicationFrame />;
+        }
+        if (code === ErrorCodes.USER_TERMS_ACCEPTANCE_REQUIRED) {
+            return <ApplicationFrame />;
+        }
+        if (code === ErrorCodes.NOT_AUTHENTICATED) { }
+        if (code === ErrorCodes.PLAN_DOES_NOT_ALLOW_PRIVATE_REPOS) {
+          return <ShowNoPrivateReposUpgrade />;
+        }
+        */
         default:
           statusMessage = <p className="text-base text-red">Unknown Error: {JSON.stringify(this.state?.error, null, 2)}</p>;
           break;
@@ -85,6 +97,15 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
     }
 
     else if (result?.runningWorkspacePrebuild) {
+      /* TODO https://github.com/gitpod-io/gitpod/blob/bd92761635e9021bf8893b5b6850a2f4f202d3f7/components/dashboard/src/components/running-prebuild-view.tsx#L29
+      Result: {
+        "runningWorkspacePrebuild": {
+          "prebuildID": "d2b43204-e28d-405d-b93e-11d1b0a148ef",
+          "workspaceID": "amber-crow-qhb9ywsz",
+          "starting": "running",
+          "sameCluster": false
+        }
+      }*/
       phase = StartPhase.Building;
       statusMessage = <p className="text-base text-gray-400">⚡Prebuild in progress</p>;
       logsView = <Suspense fallback={<div className="m-6 p-4 h-60 w-11/12 lg:w-3/5 flex-shrink-0 rounded-lg" style={{ color: '#8E8787', background: '#ECE7E5' }}>Loading...</div>}>
@@ -103,6 +124,8 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
         <span>—</span>
         <a href="https://www.gitpod.io/blog/">Blog</a>
       </p>
+      <pre className="mt-10 text-gray-200">Result: {JSON.stringify(this.state?.result, null, 2)}</pre>
+      <pre className="text-gray-200">Error: {JSON.stringify(this.state?.error, null, 2)}</pre>
     </StartPage>;
   }
 
