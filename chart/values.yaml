@@ -392,6 +392,8 @@ components:
     name: "ws-daemon"
     hostWorkspaceArea: /var/gitpod/workspaces
     servicePort: 8080
+    clusterIP: "None"
+    selectorKind: daemonset
     workspaceSizeLimit: ""
     containerRuntime:
       enabled: true
