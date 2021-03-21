@@ -6,7 +6,7 @@
 
 import { inject, injectable } from "inversify";
 import { EntityManager, Repository } from "typeorm";
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { TypeORM } from './typeorm';
 import { OneTimeSecretDB } from "../one-time-secret-db";
 import { DBOneTimeSecret } from "./entity/db-one-time-secret";
@@ -14,7 +14,7 @@ import { DBOneTimeSecret } from "./entity/db-one-time-secret";
 @injectable()
 export class TypeORMOneTimeSecretDBImpl implements OneTimeSecretDB {
     @inject(TypeORM) protected readonly typeorm: TypeORM;
-    
+
     protected async getEntityManager(): Promise<EntityManager> {
         return (await this.typeorm.getConnection()).manager;
     }

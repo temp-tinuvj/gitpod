@@ -7,7 +7,7 @@
 import { inject, injectable, postConstruct } from "inversify";
 import { Identity, User, IdentityLookup, Token, TokenEntry, UserEnvVar, GitpodTokenType, GitpodToken } from "@gitpod/gitpod-protocol";
 import { EntityManager, Repository } from "typeorm";
-import * as uuidv4 from 'uuid/v4';
+import { v4 as uuidv4 } from 'uuid';
 import { MaybeUser, UserDB, PartialUserUpdate, BUILTIN_WORKSPACE_PROBE_USER_NAME } from "../user-db";
 import { DBUser } from './entity/db-user';
 import { TypeORM } from './typeorm';
@@ -178,7 +178,7 @@ export class TypeORMUserDBImpl implements UserDB {
         const repo = await this.getGitpodTokenRepo();
         await repo.insert(token);
     }
-    
+
     public async deleteGitpodToken(tokenHash: string): Promise<void> {
         const repo = await this.getGitpodTokenRepo();
         await repo.query(`
@@ -323,10 +323,10 @@ export class TypeORMUserDBImpl implements UserDB {
         const qBuilder = userRepo.createQueryBuilder('user')
             .leftJoinAndSelect("user.identities", "identity");
         if (searchTerm) {
-            qBuilder.andWhere(`user.name LIKE :searchTerm 
-                OR user.fullName LIKE :searchTerm 
+            qBuilder.andWhere(`user.name LIKE :searchTerm
+                OR user.fullName LIKE :searchTerm
                 OR user.id in (
-                        SELECT userid from d_b_identity AS i WHERE 
+                        SELECT userid from d_b_identity AS i WHERE
                                 i.deleted != true
                             AND i.primaryEmail LIKE :searchTerm
                 )`, { searchTerm: '%' + searchTerm + '%' });
