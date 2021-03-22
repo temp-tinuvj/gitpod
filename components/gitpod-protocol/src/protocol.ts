@@ -1062,7 +1062,7 @@ export interface OAuth2Config {
 export namespace AuthProviderEntry {
     export type Type = "GitHub" | "GitLab" | string;
     export type Status = "pending" | "verified";
-    export type NewEntry = Pick<AuthProviderEntry, "ownerId" | "host" | "type">;
+    export type NewEntry = Pick<AuthProviderEntry, "ownerId" | "host" | "type"> & { clientId?: string, clientSecret?: string };
     export type UpdateEntry = Pick<AuthProviderEntry, "id" | "ownerId"> & Pick<OAuth2Config, "clientId" | "clientSecret">;
 }
 

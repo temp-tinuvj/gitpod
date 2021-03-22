@@ -1,4 +1,4 @@
-import { AuthProviderInfo } from "@gitpod/gitpod-protocol";
+import { AuthProviderEntry, AuthProviderInfo } from "@gitpod/gitpod-protocol";
 import React, { useContext, useEffect, useState } from "react";
 import ContextMenu, { ContextMenuEntry } from "../components/ContextMenu";
 import { SettingsPage } from "./SettingsPage";
@@ -12,13 +12,15 @@ export default function Integrations() {
     return (<div>
         <SettingsPage title='Integrations' subtitle='Manage permissions for git providers and git integrations'>
             <GitProviders />
+            <div className="h-12"></div>
+            <GitIntegrations/>
         </SettingsPage>
     </div>);
 }
 
 
 function GitProviders() {
-
+    
     const { user, setUser } = useContext(UserContext);
 
     const [authProviders, setAuthProviders] = useState<AuthProviderInfo[]>([]);
@@ -80,8 +82,6 @@ function GitProviders() {
         }
         return result;
     };
-
-
 
     const getUsername = (authProviderId: string) => {
         return user?.identities?.find(i => i.authProviderId === authProviderId)?.authName;
@@ -262,6 +262,177 @@ function GitProviders() {
             ))}
         </div>
     </div>);
+}
+
+function GitIntegrations() {
+
+    const { user } = useContext(UserContext);
+
+    const [providers, setProviders] = useState<AuthProviderEntry[]>([]);
+
+    const [modal, setModal] = useState<{mode: "new"} | {mode: "edit", provider: AuthProviderEntry} | undefined>(undefined);
+
+    useEffect(() => {
+        updateOwnAuthProviders();
+    }, []);
+
+    const updateOwnAuthProviders = async () => {
+        setProviders(await getGitpodService().server.getOwnAuthProviders());
+    }
+
+    const deleteProvider = (provider: AuthProviderEntry) => {
+
+    }
+
+    const startEditProvider = (provider: AuthProviderEntry) => {
+        setModal({ mode: "edit", provider });
+    }
+
+    const gitProviderMenu = (provider: AuthProviderEntry) => {
+        const result: ContextMenuEntry[] = [];
+        if (provider.status === "verified") {
+            result.push({
+                title: 'Edit Permissions',
+                onClick: () => startEditProvider(provider),
+                separator: true,
+            });
+        } else {
+            result.push(            {
+                title: 'Retry',
+                customFontStyle: 'text-green-600',
+                onClick: () => startEditProvider(provider),
+                separator: true,
+            })
+        }
+        result.push(            {
+            title: 'Remove',
+            customFontStyle: 'text-red-600',
+            onClick: () => deleteProvider(provider)
+        });
+        return result;
+    };
+
+    return (<div>
+
+        {modal?.mode === "new" && (
+            <GitIntegrationModal mode={modal.mode} userId={user?.id || "no-user"} onClose={ () => setModal(undefined) }/>
+        )}
+        {modal?.mode === "edit"  && (
+            <GitIntegrationModal mode={modal.mode} userId={user?.id || "no-user"} provider={modal.provider} onClose={ () => setModal(undefined) } />
+        )}
+
+        <h3 className="flex-grow self-center">Git Integration</h3>
+        <h2>Manage git integrations for GitLab or GitHub self-hosted instances.</h2>
+
+        {providers && providers.length === 0 && (
+            <div className="w-full flex h-80 mt-2 rounded-xl bg-gray-100">
+                <div className="m-auto text-center">
+                    <h3 className="self-center text-gray-500">No Git Integrations</h3>
+                    <div className="text-gray-500 mb-6">In addition to the default Git Providers you can authorize<br /> with a self hosted instace of a provider.</div>
+                    <button className="self-center" onClick={() => setModal({ mode: "new" })}>New Git Integration</button>
+                </div>
+            </div>
+        )}
+        <div className="flex flex-col pt-6 space-y-12">
+            {providers && providers.map(ap => (
+                <div key={"ap-" + ap.id} className="flex-grow flex flex-row hover:bg-gray-100 rounded-xl h-16 w-full">
+
+                    <div className="px-4 self-center">
+                        <div className={"rounded-full w-3 h-3 text-sm align-middle " + (ap.status === "verified" ? "bg-green-500" : "bg-gray-400")}>
+                            &nbsp;
+                        </div>
+                    </div>
+                    <div className="p-0 my-auto flex flex-col w-2/12">
+                        <span className="my-auto font-medium truncate overflow-ellipsis">{ap.type}</span>
+                    </div>
+                    <div className="flex-grow p-0 my-auto flex flex-col">
+                        <span className="my-auto truncate text-gray-500 overflow-ellipsis">{ap.host}</span>
+                    </div>
+                    <div className="self-center">
+                        <ContextMenu menuEntries={gitProviderMenu(ap)}>
+                            <img className="w-8 h-8 p-1" src={ThreeDots} alt="Actions" />
+                        </ContextMenu>
+                    </div>
+                </div>
+            ))}
+            {providers && providers.length > 0 && (
+                <button className="self-center h-full" onClick={() => setModal({ mode: "new" })}>New Git Integration</button>
+            )}
+        </div>
+    </div>);
+}
+
+function GitIntegrationModal( props: ({
+    mode: "new",
+} | {
+    mode: "edit",
+    provider: AuthProviderEntry
+}) & {
+    userId: string,
+    onClose?: () => void
+}) {
+
+    const [type, setType] = useState<string>("GitLab");
+    const [host, setHost] = useState<string>("gitlab.example.com");
+
+    useEffect(() => {
+        if (props.mode === "edit") {
+            setType(props.provider.type);
+            setHost(props.provider.host);
+        }
+    }, []);
+
+    const onClose = () => props.onClose && props.onClose();
+
+    const activate = async () => {
+        const entry: AuthProviderEntry.NewEntry = {
+            host,
+            type,
+            ownerId: props.userId
+        };
+        try {
+            const newProvider = await getGitpodService().server.updateOwnAuthProvider({ entry });
+            console.log(newProvider.id)
+        } catch (error) {
+            
+        }
+    }
+
+    return (<Modal visible={!!props} onClose={() => onClose()}>
+        <div className="space-y-4">
+            <h3 className="mb-6">{props.mode === "new" ? "New Git Itegration" : "Git Integration" }</h3>
+            <div className="flex flex-col">
+                <span className="text-gray-500">Configure a git integration with a GitLab or GitHub self-hosted instance.</span>
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="type"  className="font-medium">Provider type</label>
+                <select name="type" value={type} className="rounded-md w-full">
+                    <option value="GitHub">GitHub</option>
+                    <option value="GitLab">GitLab</option>
+                </select>
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="hostName"  className="font-medium">Provider host name</label>
+                <input name="hostName" disabled={props.mode === "edit"} type="text" value={host}  className="rounded-md w-full" />
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="hostName"  className="font-medium">Redirect URL</label>
+                <input name="hostName" disabled={true} type="text" value={host}  className="rounded-md w-full" />
+                <span className="text-gray-500">Use this redirect URL to update the OAuth application.</span>
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="hostName" className="font-medium">Client ID</label>
+                <input name="hostName" type="text" value={host}  className="rounded-md w-full" />
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="hostName"  className="font-medium">Client secrect</label>
+                <input name="hostName" type="password" value={host}  className="rounded-md w-full" />
+            </div>
+            <div className="w-full text-right mt-6">
+                <button onClick={() => activate()}>Activate</button>
+            </div>
+        </div>
+    </Modal>);
 }
 
 function CheckBox(props: {

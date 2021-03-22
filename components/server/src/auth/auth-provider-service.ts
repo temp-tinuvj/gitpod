@@ -64,7 +64,7 @@ export class AuthProviderService {
         await this.authProviderDB.delete(authProvider);
     }
 
-    async updateAuthProvider(entry: AuthProviderEntry.UpdateEntry | AuthProviderEntry.NewEntry): Promise<void> {
+    async updateAuthProvider(entry: AuthProviderEntry.UpdateEntry | AuthProviderEntry.NewEntry): Promise<AuthProviderEntry> {
         let authProvider: AuthProviderEntry;
         if ("id" in entry) {
             const { id, ownerId } = entry;
@@ -76,7 +76,7 @@ export class AuthProviderService {
                 || (entry.clientSecret && entry.clientSecret !== existing.oauth.clientSecret);
 
             if (!changed) {
-                return;
+                return existing;
             }
 
             // update config on demand
@@ -96,7 +96,7 @@ export class AuthProviderService {
             }
             authProvider = this.initializeNewProvider(entry);
         }
-        await this.authProviderDB.storeAuthProvider(authProvider as AuthProviderEntry);
+        return await this.authProviderDB.storeAuthProvider(authProvider as AuthProviderEntry);
     }
     protected initializeNewProvider(newEntry: AuthProviderEntry.NewEntry): AuthProviderEntry {
         const { host, type } = newEntry;
