@@ -12,7 +12,7 @@ import { getGitpodService, gitpodHostUrl } from "../service/service";
 import { StartPage, StartPhase } from "./StartPage";
 import StartWorkspace from "./StartWorkspace";
 
-const WorkspaceLogs = React.lazy(() => import('./WorkspaceLogs'));
+const PrebuildLogs = React.lazy(() => import('./PrebuildLogs'));
 
 export interface CreateWorkspaceProps {
   contextUrl: string;
@@ -78,7 +78,6 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
     const { contextUrl } = this.props;
     let phase = StartPhase.Checking;
     let statusMessage = <p className="text-base text-gray-400">{this.state.stillParsing ? 'Parsing context …' : 'Preparing workspace …'}</p>;
-    let logsView = undefined;
 
     const error = this.state?.error;
     if (error) {
@@ -128,15 +127,20 @@ export class CreateWorkspace extends React.Component<CreateWorkspaceProps, Creat
     }
 
     else if (result?.runningWorkspacePrebuild) {
-      statusMessage = <p className="text-base text-gray-400">⚡Prebuild in progress</p>;
-      logsView = <Suspense fallback={<div className="m-6 p-4 h-60 w-11/12 lg:w-3/5 flex-shrink-0 rounded-lg" style={{ color: '#8E8787', background: '#ECE7E5' }}>Loading...</div>}>
-        <WorkspaceLogs />
-      </Suspense>;
+      const runningPrebuild = result.runningWorkspacePrebuild;
+      statusMessage = <>
+         <p className="text-base text-gray-400">⚡Prebuild in progress</p>
+         <Suspense fallback={<div className="m-6 p-4 h-60 w-11/12 lg:w-3/5 flex-shrink-0 rounded-lg" style={{ color: '#8E8787', background: '#ECE7E5' }}>Loading...</div>}>
+          <PrebuildLogs prebuildingWorkspaceId={runningPrebuild.workspaceID}
+                        justStarting={runningPrebuild.starting}
+                        // onWatchPrebuild={() => this.createWorkspace(CreateWorkspaceMode.UsePrebuild)}
+                        onIgnorePrebuild={() => this.createWorkspace(CreateWorkspaceMode.ForceNew)} />
+        </Suspense>
+      </>;
     }
 
     return <StartPage phase={phase} error={!!error}>
       {statusMessage}
-      {logsView}
       {error && <div>
         <a href={gitpodHostUrl.asDashboard().toString()}><button className="mt-8 px-4 py-2 text-gray-500 bg-white font-semibold border-gray-500">Go back to dashboard</button></a>
         <p className="mt-14 text-base text-gray-400 flex space-x-2">

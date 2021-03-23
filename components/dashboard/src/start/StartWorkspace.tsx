@@ -5,7 +5,8 @@
  */
 
 import React from "react";
-import { DisposableCollection, WorkspaceInstance } from "@gitpod/gitpod-protocol";
+import { DisposableCollection, WorkspaceInstance, WorkspaceImageBuild } from "@gitpod/gitpod-protocol";
+import { HeadlessLogEvent } from "@gitpod/gitpod-protocol/lib/headless-workspace-log";
 import { getGitpodService, gitpodHostUrl } from "../service/service";
 import { StartPage, StartPhase } from "./StartPage";
 
@@ -118,6 +119,16 @@ export default class StartWorkspace extends React.Component<StartWorkspaceProps,
     }
 
     this.setState({ workspaceInstance });
+  }
+
+  onWorkspaceImageBuildLogs(info: WorkspaceImageBuild.StateInfo, content?: WorkspaceImageBuild.LogContent): void {
+    console.log('onWorkspaceImageBuildLogs', info, content);
+    // this.setState({ buildLog: { info, content } });
+  }
+
+  onHeadlessWorkspaceLogs(evt: HeadlessLogEvent): void {
+    console.log('onHeadlessWorkspaceLogs', evt);
+    // this.setState({ headlessLog: evt.text });
   }
 
   async ensureWorkspaceAuth(instanceID: string) {
