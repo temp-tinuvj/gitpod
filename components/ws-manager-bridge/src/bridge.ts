@@ -50,10 +50,11 @@ export class WorkspaceManagerBridge implements Disposable {
     protected readonly disposables: Disposable[] = [];
     protected readonly queues = new Map<string, Queue>();
 
-    public async start(cluster: WorkspaceCluster, clientProvider: ClientProvider) {
-        log.debug(`starting bridge: ${cluster.name} (${cluster.url})`);
-        await this.startDatabaseUpdater(clientProvider)
-            .catch(e => log.error("cannot run database updater", e));
+    public start(cluster: WorkspaceCluster, clientProvider: ClientProvider) {
+        const logPayload = { name: cluster.name, url: cluster.url };
+        log.debug(`starting bridge to cluster...`, logPayload);
+        /* no await */ this.startDatabaseUpdater(clientProvider, logPayload)
+            .catch(err => log.error("cannot run database updater", err));
 
         if (cluster.controller === this.config.installation) {
             const controllerInterval = this.config.controllerIntervalSeconds;
@@ -61,15 +62,16 @@ export class WorkspaceManagerBridge implements Disposable {
                 throw new Error("controllerInterval <= 0!");
             }
             log.debug(`starting controller: ${cluster.name} (${cluster.controller})`);
-            await this.startController(clientProvider, this.config.installation, controllerInterval, this.config.controllerMaxDisconnectSeconds);
+            this.startController(clientProvider, this.config.installation, controllerInterval, this.config.controllerMaxDisconnectSeconds);
         }
+        log.debug(`started bridge to cluster.`, logPayload);
     }
 
-    public async stop() {
+    public stop() {
         this.dispose();
     }
 
-    protected async startDatabaseUpdater(clientProvider: ClientProvider): Promise<void> {
+    protected async startDatabaseUpdater(clientProvider: ClientProvider, logPayload: {}): Promise<void> {
         const subscriber = new WsmanSubscriber(clientProvider);
         this.disposables.push(subscriber);
 
@@ -82,7 +84,7 @@ export class WorkspaceManagerBridge implements Disposable {
         const onStatusUpdate = (ctx: TraceContext, s: WorkspaceStatus) => {
             this.serializeMessagesByInstanceId<WorkspaceStatus>(ctx, s, msg => msg.getId(), (ctx, s) => this.handleStatusUpdate(ctx, s))
         };
-        await subscriber.subscribe({ onHeadlessLog, onReconnect, onStatusUpdate });
+        await subscriber.subscribe({ onHeadlessLog, onReconnect, onStatusUpdate }, logPayload);
     }
 
     protected serializeMessagesByInstanceId<M>(ctx: TraceContext, msg: M, getInstanceId: (msg: M) => string, handler: (ctx: TraceContext, msg: M) => Promise<void>) {
@@ -242,7 +244,7 @@ export class WorkspaceManagerBridge implements Disposable {
         });
     }
 
-    protected async startController(clientProvider: ClientProvider, installation: string, controllerIntervalSeconds: number, controllerMaxDisconnectSeconds: number, maxTimeToRunningPhaseSeconds = 60 * 60): Promise<void> {
+    protected startController(clientProvider: ClientProvider, installation: string, controllerIntervalSeconds: number, controllerMaxDisconnectSeconds: number, maxTimeToRunningPhaseSeconds = 60 * 60) {
         let disconnectStarted = Number.MAX_SAFE_INTEGER;
         const timer = setInterval(async () => {
             try {
@@ -252,7 +254,7 @@ export class WorkspaceManagerBridge implements Disposable {
                 disconnectStarted = Number.MAX_SAFE_INTEGER;    // Reset disconnect period
             } catch (e) {
                 if (durationLongerThanSeconds(disconnectStarted, controllerMaxDisconnectSeconds)) {
-                    log.warn("error while controlling installation's workspaces", e);
+                    log.warn("error while controlling installation's workspaces", e, { installation });
                 } else if (disconnectStarted > Date.now()) {
                     disconnectStarted = Date.now();
                 }

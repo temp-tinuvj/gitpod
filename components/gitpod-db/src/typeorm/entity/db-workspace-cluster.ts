@@ -42,7 +42,7 @@ export class DBWorkspaceCluster implements WorkspaceCluster {
             }
         }
     })
-    certificate?: Buffer;
+    certificate?: string;
 
     @Index("ind_state")
     @Column({
