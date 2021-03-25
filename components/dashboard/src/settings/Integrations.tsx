@@ -4,7 +4,8 @@
  * See License-AGPL.txt in the project root for license information.
  */
 
-import { AuthProviderInfo } from "@gitpod/gitpod-protocol";
+import * as images from '../images';
+import { AuthProviderEntry, AuthProviderInfo } from "@gitpod/gitpod-protocol";
 import React, { useContext, useEffect, useState } from "react";
 import ContextMenu, { ContextMenuEntry } from "../components/ContextMenu";
 import { SettingsPage } from "./SettingsPage";
@@ -12,12 +13,15 @@ import { getGitpodService, gitpodHostUrl } from "../service/service";
 import { UserContext } from "../user-context";
 import ThreeDots from '../icons/ThreeDots.svg';
 import Modal from "../components/Modal";
+import { openAuthorizeWindow } from "../provider-utils";
 
 export default function Integrations() {
 
     return (<div>
         <SettingsPage title='Integrations' subtitle='Manage permissions for git providers and git integrations'>
             <GitProviders />
+            <div className="h-12"></div>
+            <GitIntegrations />
         </SettingsPage>
     </div>);
 }
@@ -87,8 +91,6 @@ function GitProviders() {
         return result;
     };
 
-
-
     const getUsername = (authProviderId: string) => {
         return user?.identities?.find(i => i.authProviderId === authProviderId)?.authName;
     };
@@ -98,18 +100,7 @@ function GitProviders() {
     };
 
     const connect = async (ap: AuthProviderInfo) => {
-        const thisUrl = gitpodHostUrl;
-        const returnTo = gitpodHostUrl.with({ pathname: 'login-success' }).toString();
-        const url = thisUrl.withApi({
-            pathname: '/authorize',
-            search: `returnTo=${returnTo}&host=${ap.host}&override=true&scopes=${(ap.requirements?.default || []).join(',')}`
-        }).toString();
-        const newWindow = window.open(url, "gitpod-connect");
-        if (!newWindow) {
-            console.log(`Failed to open authorize window for ${ap.host}`);
-        }
-
-        await openAuthWindow(ap);
+        await doAuthorize(ap.host, ap.requirements?.default);
     }
 
     const disconnect = async (ap: AuthProviderInfo) => {
@@ -144,34 +135,8 @@ function GitProviders() {
         setUser(user);
     }
 
-    const openAuthWindow = async (ap: AuthProviderInfo, scopes?: string[]) => {
-        const returnTo = gitpodHostUrl.with({ pathname: 'login-success' }).toString();
-        const url = gitpodHostUrl.withApi({
-            pathname: '/authorize',
-            search: `returnTo=${encodeURIComponent(returnTo)}&host=${ap.host}&override=true&scopes=${(scopes || ap.requirements?.default || []).join(',')}`
-        }).toString();
-        const newWindow = window.open(url, "gitpod-connect");
-        if (!newWindow) {
-            console.log(`Failed to open the authorize window for ${ap.host}`);
-        }
-
-        const eventListener = (event: MessageEvent) => {
-            // todo: check event.origin
-
-            if (event.data === "auth-success") {
-                window.removeEventListener("message", eventListener);
-
-                if (event.source && "close" in event.source && event.source.close) {
-                    console.log(`try to close window`);
-                    event.source.close();
-                } else {
-                    // todo: add a button to the /login-success page to close, if this should not work as expected
-                }
-                updateUser();
-            }
-        };
-
-        window.addEventListener("message", eventListener);
+    const doAuthorize = async (host: string, scopes?: string[]) => {
+        openAuthorizeWindow({ host, scopes, onSuccess: () => updateUser() });
     }
 
     const updatePermissions = async () => {
@@ -179,7 +144,7 @@ function GitProviders() {
             return;
         }
         try {
-            await openAuthWindow(editModal.provider, Array.from(editModal.nextScopes));
+            await doAuthorize(editModal.provider.host, Array.from(editModal.nextScopes));
         } catch (error) {
             console.log(error);
         }
@@ -201,38 +166,43 @@ function GitProviders() {
 
     return (<div>
         <Modal visible={!!diconnectModal} onClose={() => setDisconnectModal(undefined)}>
-            <h3>You are about to disconnect {diconnectModal?.provider.host}</h3>
-            <div>
+            <h3 className="pb-2">You are about to disconnect {diconnectModal?.provider.host}</h3>
+            <div className="flex justify-end mt-6">
                 <button onClick={() => disconnect(diconnectModal?.provider!)}>Proceed</button>
             </div>
         </Modal>
 
         <Modal visible={!!editModal} onClose={() => setEditModal(undefined)}>
+            <h3 className="pb-2">Edit Permissions</h3>
             <div>
-                {editModal && (<React.Fragment>
-                    <h3>Permissions granted</h3>
-                    <div>
-                        {editModal && editModal.provider.scopes!.map(scope => (
-                            <div key={`scope-${scope}`}>
-                                <CheckBox
-                                    name={scope}
-                                    desc={scope}
-                                    title={scope}
-                                    key={`scope-checkbox-${scope}`}
-                                    checked={editModal.nextScopes.has(scope)}
-                                    disabled={editModal.provider.requirements?.default.includes(scope)}
-                                    onChange={onChangeScopeHandler}
-                                ></CheckBox>
+                {editModal && (
+                    <React.Fragment>
+                        <div className="border-t border-b border-gray-200 mt-2 -mx-6 px-6 py-4">
+                            <div>
+                                Configure provider permissions.
                             </div>
-                        ))}
-                    </div>
-                    <div>
-                        <button onClick={() => updatePermissions()}
-                            disabled={equals(editModal.nextScopes, editModal.prevScopes)}
-                        >
-                            Update
-                    </button>
-                    </div></React.Fragment>
+                            {editModal && editModal.provider.scopes!.map(scope => (
+                                <div key={`scope-${scope}`}>
+                                    <CheckBox
+                                        name={scope}
+                                        desc={scope}
+                                        title={scope}
+                                        key={`scope-checkbox-${scope}`}
+                                        checked={editModal.nextScopes.has(scope)}
+                                        disabled={editModal.provider.requirements?.default.includes(scope)}
+                                        onChange={onChangeScopeHandler}
+                                    ></CheckBox>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end mt-6">
+                            <button onClick={() => updatePermissions()}
+                                disabled={equals(editModal.nextScopes, editModal.prevScopes)}
+                            >
+                                Update
+                            </button>
+                        </div>
+                    </React.Fragment>
                 )}
             </div>
         </Modal>
@@ -268,6 +238,258 @@ function GitProviders() {
             ))}
         </div>
     </div>);
+}
+
+function GitIntegrations() {
+
+    const { user } = useContext(UserContext);
+
+    const [providers, setProviders] = useState<AuthProviderEntry[]>([]);
+
+    const [modal, setModal] = useState<{ mode: "new" } | { mode: "edit", provider: AuthProviderEntry } | undefined>(undefined);
+
+    useEffect(() => {
+        updateOwnAuthProviders();
+    }, []);
+
+    const updateOwnAuthProviders = async () => {
+        setProviders(await getGitpodService().server.getOwnAuthProviders());
+    }
+
+    const deleteProvider = (provider: AuthProviderEntry) => {
+
+    }
+
+    const startEditProvider = (provider: AuthProviderEntry) => {
+        setModal({ mode: "edit", provider });
+    }
+
+    const gitProviderMenu = (provider: AuthProviderEntry) => {
+        const result: ContextMenuEntry[] = [];
+        if (provider.status === "verified") {
+            result.push({
+                title: 'Edit Permissions',
+                onClick: () => startEditProvider(provider),
+                separator: true,
+            });
+        } else {
+            result.push({
+                title: 'Retry',
+                customFontStyle: 'text-green-600',
+                onClick: () => startEditProvider(provider),
+                separator: true,
+            })
+        }
+        result.push({
+            title: 'Remove',
+            customFontStyle: 'text-red-600',
+            onClick: () => deleteProvider(provider)
+        });
+        return result;
+    };
+
+    return (<div>
+
+        {modal?.mode === "new" && (
+            <GitIntegrationModal mode={modal.mode} userId={user?.id || "no-user"} onClose={() => setModal(undefined)} />
+        )}
+        {modal?.mode === "edit" && (
+            <GitIntegrationModal mode={modal.mode} userId={user?.id || "no-user"} provider={modal.provider} onClose={() => setModal(undefined)} />
+        )}
+
+        <h3 className="flex-grow self-center">Git Integration</h3>
+        <h2>Manage git integrations for GitLab or GitHub self-hosted instances.</h2>
+
+        {providers && providers.length === 0 && (
+            <div className="w-full flex h-80 mt-2 rounded-xl bg-gray-100">
+                <div className="m-auto text-center">
+                    <h3 className="self-center text-gray-500">No Git Integrations</h3>
+                    <div className="text-gray-500 mb-6">In addition to the default Git Providers you can authorize<br /> with a self hosted instace of a provider.</div>
+                    <button className="self-center" onClick={() => setModal({ mode: "new" })}>New Git Integration</button>
+                </div>
+            </div>
+        )}
+        <div className="flex flex-col pt-6 space-y-12">
+            {providers && providers.map(ap => (
+                <div key={"ap-" + ap.id} className="flex-grow flex flex-row hover:bg-gray-100 rounded-xl h-16 w-full">
+
+                    <div className="px-4 self-center">
+                        <div className={"rounded-full w-3 h-3 text-sm align-middle " + (ap.status === "verified" ? "bg-green-500" : "bg-gray-400")}>
+                            &nbsp;
+                        </div>
+                    </div>
+                    <div className="p-0 my-auto flex flex-col w-2/12">
+                        <span className="my-auto font-medium truncate overflow-ellipsis">{ap.type}</span>
+                    </div>
+                    <div className="flex-grow p-0 my-auto flex flex-col">
+                        <span className="my-auto truncate text-gray-500 overflow-ellipsis">{ap.host}</span>
+                    </div>
+                    <div className="self-center">
+                        <ContextMenu menuEntries={gitProviderMenu(ap)}>
+                            <img className="w-8 h-8 p-1" src={ThreeDots} alt="Actions" />
+                        </ContextMenu>
+                    </div>
+                </div>
+            ))}
+            {providers && providers.length > 0 && (
+                <button className="self-center h-full" onClick={() => setModal({ mode: "new" })}>New Git Integration</button>
+            )}
+        </div>
+    </div>);
+}
+
+function GitIntegrationModal(props: ({
+    mode: "new",
+} | {
+    mode: "edit",
+    provider: AuthProviderEntry
+}) & {
+    userId: string,
+    onClose?: () => void
+}) {
+
+    const [type, setType] = useState<string>("GitLab");
+    const [host, setHost] = useState<string>("gitlab.example.com");
+    const [redirectURL, setRedirectURL] = useState<string>("gitlab.example.com");
+    const [clientId, setClientId] = useState<string>("");
+    const [clientSecret, setClientSecret] = useState<string>("");
+    const [busy, setBusy] = useState<boolean>(false);
+    const [errorMessage, setErrorMessage] = useState<string | undefined>();
+
+    useEffect(() => {
+        if (props.mode === "edit") {
+            setType(props.provider.type);
+            setHost(props.provider.host);
+            setClientId(props.provider.oauth.clientId);
+            setRedirectURL(props.provider.oauth.callBackUrl);
+            setClientId(props.provider.oauth.clientId);
+        }
+    }, []);
+
+    const onClose = () => props.onClose && props.onClose();
+
+    const activate = async () => {
+        let entry = (props.mode === "new") ? {
+            host,
+            type,
+            clientId,
+            clientSecret,
+            ownerId: props.userId
+        } as AuthProviderEntry.NewEntry : {
+            id: props.provider.id,
+            ownerId: props.userId,
+            clientId,
+            clientSecret,
+        } as AuthProviderEntry.UpdateEntry
+
+        setBusy(true);
+        setErrorMessage(undefined);
+        try {
+            const newProvider = await getGitpodService().server.updateOwnAuthProvider({ entry });
+
+            // just wait two sec for the changes to be propagated
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            await openAuthorizeWindow({ host: newProvider.host, onSuccess: onClose });
+        } catch (error) {
+            console.log(error);
+            setErrorMessage("message" in error ? error.message : "Failed to update Git provider");
+        }
+        setBusy(false);
+    }
+
+    const callbackUrl = (host: string) => {
+        const pathname = `/auth/${host}/callback`;
+        return gitpodHostUrl.with({ pathname }).toString();
+    };
+
+    const updateHostValue = (host: string) => {
+        if (props.mode === "new") {
+            setHost(host);
+            setRedirectURL(callbackUrl(host));
+        }
+    }
+
+    const getRedirectUrlDescription = (type: string, host: string) => {
+        let url = ``;
+        switch (type) {
+            case "GitHub":
+                url = `${host}/settings/developers`;
+                break;
+            case "GitLab":
+                url = `${host}/profile/applications`;
+                break;
+            default: return undefined;
+        }
+
+        return (<span>
+            Use this redirect URL to update the OAuth application. 
+            Go to <a href={`https://${url}`} target="_blank" rel="noopener" className="text-gray-400 underline underline-thickness-thin underline-offset-small hover:text-gray-600">{url}</a> and setup the OAuth application.&nbsp;
+            <a href="https://www.gitpod.io/docs/gitlab-integration/#oauth-application" target="_blank" rel="noopener" className="text-gray-400 underline underline-thickness-thin underline-offset-small hover:text-gray-600">Learn more</a>.
+        </span>);
+    }
+
+    const copyRedirectUrl = () => {
+        const el = document.createElement("textarea");
+        el.value = redirectURL;
+        document.body.appendChild(el);
+        el.select();
+        try {
+            document.execCommand("copy");
+        } finally {
+            document.body.removeChild(el);
+        }
+    };
+
+    return (<Modal visible={!!props} onClose={() => onClose()}>
+        <h3 className="pb-2">{props.mode === "new" ? "New Git Itegration" : "Git Integration"}</h3>
+        <div className="space-y-4 border-t border-b border-gray-200 mt-2 -mx-6 px-6 py-4">
+            <div className="flex flex-col">
+                <span className="text-gray-500">Configure a git integration with a GitLab or GitHub self-hosted instance.</span>
+            </div>
+            {errorMessage && (
+                <div className="flex rounded-md bg-yellow-400">
+                    <span className="text-red-400">{errorMessage}</span>
+                </div>
+            )}
+            <div className="flex flex-col">
+                <label htmlFor="type" className="font-medium">Provider type</label>
+                <select name="type" value={type} disabled={props.mode === "edit"} className="rounded-md w-full"
+                    onChange={(e) => setType(e.target.value) }>
+                    <option value="GitHub">GitHub</option>
+                    <option value="GitLab">GitLab</option>
+                </select>
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="hostName" className="font-medium">Provider host name</label>
+                <input name="hostName" disabled={props.mode === "edit"} type="text" value={host} className="rounded-md w-full"
+                    onChange={(e) => updateHostValue(e.target.value) } />
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="redirectURL" className="font-medium">Redirect URL</label>
+                <div className="w-full relative">
+                    <input name="redirectURL" disabled={true} readOnly={true} type="text" defaultValue={redirectURL} className="rounded-md w-full" />
+                    <div className="cursor-pointer" onClick={() => copyRedirectUrl()}>
+                        <img src={images.copy} className="absolute top-1/3 right-3" />
+                    </div>
+                </div>
+                <span className="text-gray-500">{getRedirectUrlDescription(type, host)}</span>
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="clientId" className="font-medium">Client ID</label>
+                <input name="clientId" type="text" value={clientId} className="rounded-md w-full" 
+                    onChange={(e) => setClientId(e.target.value) } />
+            </div>
+            <div className="flex flex-col">
+                <label htmlFor="clientSecret" className="font-medium">Client secrect</label>
+                <input name="clientSecret" type="password" value={clientSecret} className="rounded-md w-full" 
+                    onChange={(e) => setClientSecret(e.target.value) } />
+            </div>
+        </div>
+        <div className="flex justify-end mt-6">
+            <button onClick={() => activate()} disabled={busy}>Activate</button>
+        </div>
+    </Modal>);
 }
 
 function CheckBox(props: {

@@ -85,7 +85,7 @@ export class Workspaces extends React.Component<WorkspacesProps, WorkspacesState
                         onClick: () => { if (wsModel) wsModel.limit = 200; }
                     }]} />
                 </div>
-                {wsModel && this.state?.workspaces.length > 0 ? 
+                {wsModel && this.state?.workspaces?.length > 0 ? 
                  <button onClick={toggleStartWSModal} className="ml-2 font-medium">New Workspace</button>
                  : null
                 }

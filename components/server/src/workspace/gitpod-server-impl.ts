@@ -1498,13 +1498,7 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
     }
 
     async getOwnAuthProviders(): Promise<AuthProviderEntry[]> {
-        const redacted = (entry: AuthProviderEntry) => ({
-            ...entry,
-            oauth: {
-                ...entry.oauth,
-                clientSecret: "redacted"
-            }
-        });
+        const redacted = (entry: AuthProviderEntry) => AuthProviderEntry.redact(entry);
         let userId: string;
         try {
             userId = this.checkAndBlockUser("getOwnAuthProviders").id;
@@ -1531,7 +1525,7 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
     //   for example [foo.bar/gitlab]
     protected validHostNameRegexp = /^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(\/([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$/;
 
-    async updateOwnAuthProvider({ entry }: GitpodServer.UpdateOwnAuthProviderParams): Promise<void> {
+    async updateOwnAuthProvider({ entry }: GitpodServer.UpdateOwnAuthProviderParams): Promise<AuthProviderEntry> {
         let userId: string;
         try {
             userId = this.checkAndBlockUser("updateOwnAuthProvider").id;
@@ -1562,7 +1556,8 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
                     throw new Error("Provider for host has already been registered.");
                 }
             }
-            await this.authProviderService.updateAuthProvider(safeProvider);
+            const result = await this.authProviderService.updateAuthProvider(safeProvider);
+            return AuthProviderEntry.redact(result)
         } catch (error) {
             const message = error && error.message ? error.message : "Failed to update the provider.";
             throw new ResponseError(ErrorCodes.CONFLICT, message);
