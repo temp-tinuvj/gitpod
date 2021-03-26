@@ -3,7 +3,7 @@ const fs = require('fs');
 const { werft, exec, gitTag } = require('./util/shell.js');
 const { sleep } = require('./util/util.js');
 const { wipeAndRecreateNamespace, setKubectlContextNamespace, deleteNonNamespaceObjects } = require('./util/kubectl.js');
-const { issueAndInstallCertficate } = require('./util/certs.js');
+const { issueCertficate, installCertficate } = require('./util/certs.js');
 const { reportBuildFailureInSlack } = require('./util/slack.js');
 const semver = require('semver');
 
@@ -67,6 +67,23 @@ async function build(context, version) {
     const registryFacadeHandover = "registry-facade-handover" in buildConfig;
     const storage = buildConfig["storage"] || "";
     const withIntegrationTests = buildConfig["with-integration-tests"] == "true";
+    const wsClusterRaw = buildConfig["as-ws-cluster"]; // e.g., "dev2|gpl-my-branch": deploys this build as so that it is available under that subdomain as that cluster
+    let wsCluster = undefined;
+    if (wsClusterRaw) {
+        let parts = wsClusterRaw.split("|");
+        if (parts.length === 2) {
+            wsCluster = {
+                name: parts[0],
+                subdomain: parts[1]
+            };
+        }
+    }
+    const additionalWsSubdomainsRaw = buildConfig["add-ws-subdomains"];  // comma-separated list of additional workspace subdomains
+    let additionalWsSubdomains = [];
+    if (additionalWsSubdomainsRaw) {
+        additionalWsSubdomains = additionalWsSubdomainsRaw.split(",");
+    }
+
     werft.log("job config", JSON.stringify({
         buildConfig,
         version,
@@ -80,6 +97,8 @@ async function build(context, version) {
         registryFacadeHandover,
         storage: storage,
         withIntegrationTests,
+        wsCluster,
+        additionalWsSubdomains,
     }));
 
     /**
@@ -167,6 +186,9 @@ async function build(context, version) {
       namespace,
       domain,
       url,
+      shortnameOverride: wsCluster ? wsCluster.name : undefined,
+      dashboardHostNameOverride: wsCluster ? `${wsCluster.subdomain}.staging.gitpod-dev.com` : undefined,
+      additionalWsSubdomains: wsCluster ? [...additionalWsSubdomains, wsCluster.name] : additionalWsSubdomains,
     };
     await deployToDev(deploymentConfig, workspaceFeatureFlags, dynamicCPULimits, registryFacadeHandover, storage);
 
@@ -192,7 +214,17 @@ async function deployToDev(deploymentConfig, workspaceFeatureFlags, dynamicCPULi
     let namespaceRecreatedPromise = new Promise((resolve) => {
         namespaceRecreatedResolve = resolve;
     });
-    const certificatePromise = issueAndInstallCertficate(werft, ".werft/certs", GCLOUD_SERVICE_ACCOUNT_PATH, namespace, "gitpod-dev.com", domain, "34.76.116.244", namespaceRecreatedPromise, "proxy-config-certificates");
+    const certificatePromise = (async function() {
+        const additionalWsSubdomains = deploymentConfig.additionalWsSubdomains || [];
+        await issueCertficate(werft, ".werft/certs", GCLOUD_SERVICE_ACCOUNT_PATH, namespace, "gitpod-dev.com", domain, "34.76.116.244", additionalWsSubdomains);
+        
+        werft.log('certificate', 'waiting for preview env namespace being re-created...');
+        await namespaceRecreatedPromise;
+
+        const fromNamespace = deploymentConfig.certificateSrcOverride || namespace;
+        await installCertficate(werft, fromNamespace, namespace, "proxy-config-certificates");
+    })();
+
 
     // re-create namespace
     try {
@@ -274,6 +306,13 @@ async function deployToDev(deploymentConfig, workspaceFeatureFlags, dynamicCPULi
     if (registryFacadeHandover) {
         flags+=` --set components.registryFacade.handover.enabled=true`;
         flags+=` --set components.registryFacade.handover.socket=/var/lib/gitpod/registry-facade-${namespace}`;
+    }
+    if (deploymentConfig.shortnameOverride) {
+        flags+=` --set installation.shortname=${deploymentConfig.shortnameOverride}`;
+    }
+    if (deploymentConfig.dashboardHostNameOverride) {
+        flags+=` --set components.wsManagerBridge.disabled=true`;
+        flags+=` --set components.proxy.svcTargetComp=ws-proxy`;
     }
 
     // const pathToVersions = `${shell.pwd().toString()}/versions.yaml`;
