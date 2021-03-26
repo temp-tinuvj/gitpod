@@ -80,6 +80,8 @@ func (c *WorkspacePodConfig) Validate() error {
 type GitpodInstallation struct {
 	Scheme              string `json:"scheme"`
 	HostName            string `json:"hostName"`
+	DashboardHostUrl    string `json:"dashboardHostUrl"`
+	ApiHostUrl          string `json:"apiHostUrl"`
 	WorkspaceHostSuffix string `json:"workspaceHostSuffix"`
 }
 
@@ -91,7 +93,9 @@ func (c *GitpodInstallation) Validate() error {
 
 	return validation.ValidateStruct(c,
 		validation.Field(&c.Scheme, validation.Required),
-		validation.Field(&c.HostName, validation.Required), // TODO IP ONLY: Check if there is any dependency. If yes, remove it.
+		validation.Field(&c.HostName, validation.Required),
+		validation.Field(&c.DashboardHostUrl, validation.Required),
+		validation.Field(&c.ApiHostUrl, validation.Required),
 		validation.Field(&c.WorkspaceHostSuffix, validation.Required),
 	)
 }

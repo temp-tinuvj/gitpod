@@ -20,10 +20,10 @@ import * as IDEWorker from "./ide/ide-worker";
 import * as IDEWebSocket from "./ide/ide-web-socket";
 import { SupervisorServiceClient } from "./ide/supervisor-service-client";
 import * as LoadingFrame from "./shared/loading-frame";
-import { serverUrl, startUrl } from "./shared/urls";
+import { apiHostUrl, startUrl } from "./shared/urls";
 
 window.gitpod = {
-    service: createGitpodService(serverUrl.toString())
+    service: createGitpodService(apiHostUrl.then(u => u.toString()))
 };
 IDEWorker.install();
 IDEWebSocket.install();
@@ -68,6 +68,7 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
     }
 
     //#region current-frame
+    const startUrlStr = (await startUrl).toString();
     let current: HTMLElement = loading.frame;
     let stopped = false;
     const nextFrame = () => {
@@ -87,7 +88,7 @@ const loadingIDE = new Promise(resolve => window.addEventListener('DOMContentLoa
                 // reload the page if the workspace was restarted to ensure:
                 // - graceful reconnection of IDEs
                 // - new owner token is set
-                window.location.href = startUrl.toString();
+                window.location.href = startUrlStr;
             }
         }
         return loading.frame;

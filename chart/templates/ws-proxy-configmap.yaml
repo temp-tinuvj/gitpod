@@ -47,6 +47,8 @@ data:
             "gitpodInstallation": {
                 "scheme": "{{- template "gitpod.scheme" $this -}}",
                 "hostName": "{{- $gp.hostname -}}",
+                "dashboardHostUrl": "{{- template "gitpod.scheme" $this -}}://{{- $gp.dashboardHostName | default $gp.hostname -}}",
+                "apiHostUrl": "{{- template "gitpod.scheme" $this -}}://{{- $gp.apiHostName | default $gp.hostname -}}",
                 "workspaceHostSuffix": ".ws{{- if $gp.installation.shortname -}}-{{ $.Values.installation.shortname }}{{- end -}}.{{ $.Values.hostname }}"
             },
             "workspacePodConfig": {

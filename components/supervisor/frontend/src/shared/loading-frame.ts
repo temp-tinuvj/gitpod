@@ -11,14 +11,16 @@ import { createMessageConnection } from 'vscode-jsonrpc/lib/main';
 import { ConsoleLogger } from 'vscode-ws-jsonrpc';
 import { startUrl } from './urls';
 
-const serverOrigin = startUrl.url.origin;
-const relocateListener = (event: MessageEvent) => {
-    if (event.origin === serverOrigin && event.data.type == 'relocate' && event.data.url) {
-        window.removeEventListener('message', relocateListener);
-        window.location.href = event.data.url;
-    }
-};
-window.addEventListener('message', relocateListener, false);
+const serverOriginPromise = startUrl.then(s => s.url.origin);
+serverOriginPromise.then(serverOrigin => {
+    const relocateListener = (event: MessageEvent) => {
+        if (event.origin === serverOrigin && event.data.type == 'relocate' && event.data.url) {
+            window.removeEventListener('message', relocateListener);
+            window.location.href = event.data.url;
+        }
+    };
+    window.addEventListener('message', relocateListener, false);
+});
 
 export function load({ gitpodService }: {
     gitpodService: ReturnType<typeof createGitpodService>
@@ -26,15 +28,16 @@ export function load({ gitpodService }: {
     frame: HTMLIFrameElement
     setState: (state: object) => void
 }> {
-    return new Promise(resolve => {
+    return new Promise(async (resolve) => {
         const frame = document.createElement('iframe');
-        frame.src = startUrl.toString();
+        frame.src = (await startUrl).toString();
         frame.style.visibility = 'visible';
         frame.className = 'gitpod-frame loading';
         document.body.appendChild(frame);
 
         const factory = new JsonRpcProxyFactory<GitpodClient>(gitpodService.server);
         gitpodService.registerClient(factory.createProxy());
+        const serverOrigin = await serverOriginPromise;
         const reader = new WindowMessageReader('gitpodServer', serverOrigin);
         frame.onload = () => {
             const frameWindow = frame.contentWindow!;

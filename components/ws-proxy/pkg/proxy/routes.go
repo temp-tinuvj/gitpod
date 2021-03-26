@@ -7,6 +7,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -41,7 +42,14 @@ type RouteHandlerConfigOpt func(*Config, *RouteHandlerConfig)
 // WithDefaultAuth enables workspace access authentication
 func WithDefaultAuth(infoprov WorkspaceInfoProvider) RouteHandlerConfigOpt {
 	return func(config *Config, c *RouteHandlerConfig) {
-		c.WorkspaceAuthHandler = WorkspaceAuthHandler(config.GitpodInstallation.HostName, infoprov)
+		// TODO (geropl): Is this the right way to solve the authentication?
+		u, err := url.Parse(config.GitpodInstallation.DashboardHostUrl)
+		if err != nil {
+			log.Fatal("Unable to parse DashboardHostUrl")
+		}
+		//config.GitpodInstallation.HostName
+
+		c.WorkspaceAuthHandler = WorkspaceAuthHandler(u.Hostname(), infoprov)
 	}
 }
 
@@ -99,6 +107,7 @@ func installWorkspaceRoutes(r *mux.Router, config *RouteHandlerConfig, ip Worksp
 	routes.HandleSupervisorFrontendRoute(r.PathPrefix("/_supervisor/frontend"))
 	routes.HandleDirectSupervisorRoute(r.PathPrefix("/_supervisor/v1/status/supervisor"), false)
 	routes.HandleDirectSupervisorRoute(r.PathPrefix("/_supervisor/v1/status/ide"), false)
+	routes.HandleSupervisorInfoRoute(r.PathPrefix("/_supervisor/v1/info/gitpod"))
 	routes.HandleDirectSupervisorRoute(r.PathPrefix("/_supervisor/v1"), true)
 	routes.HandleDirectSupervisorRoute(r.PathPrefix("/_supervisor"), true)
 
@@ -188,6 +197,36 @@ func (ir *ideRoutes) HandleSupervisorFrontendRoute(route *mux.Route) {
 	}))
 }
 
+type gitpodInstallationInfo struct {
+	ApiHostUrl       string `json:"apiHostUrl"`
+	DashboardHostUrl string `json:"dashboardHostUrl"`
+}
+
+func (ir *ideRoutes) HandleSupervisorInfoRoute(route *mux.Route) {
+	r := route.Subrouter()
+	r.Use(logRouteHandlerHandler("HandleSupervisorInfoRoute"))
+	r.Use(ir.Config.CorsHandler)
+	// r.Use(ir.Config.WorkspaceAuthHandler)
+	r.Use(ir.workspaceMustExistHandler)
+
+	gitpodInfo := gitpodInstallationInfo{
+		ApiHostUrl:       ir.Config.Config.GitpodInstallation.ApiHostUrl,
+		DashboardHostUrl: ir.Config.Config.GitpodInstallation.DashboardHostUrl,
+	}
+
+	r.NewRoute().HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		msg, err := json.Marshal(gitpodInfo)
+		if err != nil {
+			resp.Write([]byte("cannot marshall GitpodInstallationInfo"))
+			resp.WriteHeader(500)
+			return
+		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write(msg)
+	})
+}
+
 func (ir *ideRoutes) HandleRoot(route *mux.Route) {
 	r := route.Subrouter()
 	r.Use(logRouteHandlerHandler("handleRoot"))
@@ -253,7 +292,11 @@ func installWorkspacePortRoutes(r *mux.Router, config *RouteHandlerConfig) error
 	r.Use(logHandler)
 	r.Use(config.WorkspaceAuthHandler)
 	// filter all session cookies
-	r.Use(sensitiveCookieHandler(config.Config.GitpodInstallation.HostName))
+	u, err := url.Parse(config.Config.GitpodInstallation.DashboardHostUrl)
+	if err != nil {
+		return fmt.Errorf("Unable to parse DashboardHostUrl: %w", err)
+	}
+	r.Use(sensitiveCookieHandler(u.Hostname()))
 
 	// forward request to workspace port
 	r.NewRoute().HandlerFunc(
@@ -457,7 +500,7 @@ func workspaceMustExistHandler(config *Config, infoProvider WorkspaceInfoProvide
 			info := infoProvider.WorkspaceInfo(req.Context(), coords.ID)
 			if info == nil {
 				log.WithFields(log.OWI("", coords.ID, "")).Info("no workspace info found - redirecting to start")
-				redirectURL := fmt.Sprintf("%s://%s/start/#%s", config.GitpodInstallation.Scheme, config.GitpodInstallation.HostName, coords.ID)
+				redirectURL := fmt.Sprintf("%s/start/#%s", config.GitpodInstallation.DashboardHostUrl, coords.ID)
 				http.Redirect(resp, req, redirectURL, 302)
 				return
 			}
@@ -624,7 +667,7 @@ func servePortNotFoundPage(config *Config) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	page = bytes.ReplaceAll(page, []byte("https://gitpod.io"), []byte(fmt.Sprintf("%s://%s", config.GitpodInstallation.Scheme, config.GitpodInstallation.HostName)))
+	page = bytes.ReplaceAll(page, []byte("https://gitpod.io"), []byte(fmt.Sprintf("%s://%s", config.GitpodInstallation.Scheme, config.GitpodInstallation.HostName))) // TODO(geropl) This should maybe be DashboardHostUrl as well. Check how this works in new dashboard!
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

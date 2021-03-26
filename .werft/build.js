@@ -319,6 +319,7 @@ async function deployToDev(deploymentConfig, workspaceFeatureFlags, dynamicCPULi
     if (wsCluster) {
         flags+=` --set hostname=${wsCluster.domain}`;
         flags+=` --set installation.shortname=${wsCluster.shortname}`;
+        
         flags+=` --set dashboardHostName=${wsCluster.domain}`;
         flags+=` --set apiHostName=${wsCluster.domain}`;
 
