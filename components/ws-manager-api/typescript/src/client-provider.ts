@@ -65,6 +65,17 @@ export class WorkspaceManagerClientProvider implements Disposable {
             } else {
                 credentials = grpc.credentials.createInsecure();
             }
+            if (info.token) {
+                const token = info.token;
+                const metaCallback = (_params: { service_url: string }, callback: (error: Error | null, metadata?: grpc.Metadata) => void) => {
+                    const meta = new grpc.Metadata();
+                    meta.add('ws-cluster-token', token);
+                    callback(null, meta);
+                }
+                const callCreds = grpc.credentials.createFromMetadataGenerator(metaCallback);
+                credentials = grpc.credentials.combineChannelCredentials(credentials, callCreds);
+            }
+            
             const options = {
                 ...grpcOptions
             };

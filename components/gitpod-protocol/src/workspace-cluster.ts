@@ -18,6 +18,9 @@ export interface WorkspaceCluster {
     // Certificate of the cluster's ws-manager API, base64 encoded
     certificate?: string;
 
+    // Token to authenticate access to the workspace cluster
+    token?: string;
+
     // Current state of the cluster
     state: WorkspaceClusterState;
 

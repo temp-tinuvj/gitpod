@@ -91,6 +91,14 @@ var clustersRegisterCmd = &cobra.Command{
 			request.Cert = content
 		}
 
+		token, err := cmd.Flags().GetString("token")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(token) > 0 {
+			request.Token = token
+		}
+
 		if request.Hints == nil {
 			request.Hints = &api.RegistrationHints{}
 		}
@@ -142,6 +150,7 @@ func init() {
 	clustersRegisterCmd.Flags().String("name", "", "cluster name")
 	clustersRegisterCmd.Flags().String("url", "", "cluster url")
 	clustersRegisterCmd.Flags().String("cert", "", "filename fo the cluster cert")
+	clustersRegisterCmd.Flags().String("token", "", "cluster token")
 	clustersRegisterCmd.Flags().Bool("hint-cordoned", false, "sets hint cordoned")
 	clustersRegisterCmd.Flags().Bool("hint-govern", false, "sets hint govern")
 	clustersRegisterCmd.Flags().String("hint-preferability", "none", "sets hint preferability, one of: 'none', 'prefer', 'dontschedule'")

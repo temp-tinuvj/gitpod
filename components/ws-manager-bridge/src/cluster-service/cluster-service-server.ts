@@ -43,7 +43,7 @@ export class ClusterService implements IClusterServiceServer {
     @inject(BridgeController)
     protected readonly bridgeController: BridgeController;
 
-    // using a queue to make sure we're not
+    // using a queue to make sure we do concurrency right
     protected readonly queue: Queue = new Queue();
 
     public register(call: grpc.ServerUnaryCall<RegisterRequest>, callback: grpc.sendUnaryData<RegisterResponse>) {
@@ -89,11 +89,16 @@ export class ClusterService implements IClusterServiceServer {
                 if (typeof req.cert === "string" && req.cert !== "") {
                     certificate = req.cert;
                 }
+                let token: string | undefined = undefined;
+                if (req.token) {
+                    token = req.token;
+                }
 
                 const newCluster: WorkspaceCluster = {
                     name: req.name,
                     url: req.url,
                     certificate,
+                    token,
                     state,
                     score,
                     maxScore: 100,

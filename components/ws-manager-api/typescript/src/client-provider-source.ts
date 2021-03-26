@@ -14,7 +14,7 @@ export interface WorkspaceManagerClientProviderSource {
     getAvailableWorkspaceClusters(): Promise<WorkspaceCluster[]>;
 }
 
-export type WorkspaceManagerConnectionInfo = Pick<WorkspaceCluster, "url" | "certificate">;
+export type WorkspaceManagerConnectionInfo = Pick<WorkspaceCluster, "url" | "certificate" | "token">;
 
 
 @injectable()
