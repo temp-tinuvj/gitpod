@@ -53,15 +53,17 @@ export class WorkspaceManagerBridge implements Disposable {
     public start(cluster: WorkspaceCluster, clientProvider: ClientProvider) {
         const logPayload = { name: cluster.name, url: cluster.url };
         log.debug(`starting bridge to cluster...`, logPayload);
-        /* no await */ this.startDatabaseUpdater(clientProvider, logPayload)
-            .catch(err => log.error("cannot run database updater", err));
 
         if (cluster.controller === this.config.installation) {
+            log.debug(`starting DB updater: ${cluster.name}`, logPayload);
+            /* no await */ this.startDatabaseUpdater(clientProvider, logPayload)
+                .catch(err => log.error("cannot run database updater", err));
+
             const controllerInterval = this.config.controllerIntervalSeconds;
             if (controllerInterval <= 0) {
                 throw new Error("controllerInterval <= 0!");
             }
-            log.debug(`starting controller: ${cluster.name} (${cluster.controller})`);
+            log.debug(`starting controller: ${cluster.name}`, logPayload);
             this.startController(clientProvider, this.config.installation, controllerInterval, this.config.controllerMaxDisconnectSeconds);
         }
         log.debug(`started bridge to cluster.`, logPayload);
