@@ -33,6 +33,7 @@ import * as opentracing from 'opentracing';
 import { URL } from 'url';
 import * as uuidv4 from 'uuid/v4';
 import { Disposable, ResponseError } from 'vscode-jsonrpc';
+import { IAnalyticsWriter } from "@gitpod/gitpod-protocol/lib/util/analytics";
 import { AuthProviderService } from '../auth/auth-provider-service';
 import { HostContextProvider } from '../auth/host-context-provider';
 import { GuardedResource, ResourceAccessGuard, ResourceAccessOp } from '../auth/resource-access';
@@ -75,6 +76,7 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
     @inject(UserMessageViewsDB) protected readonly userMessageViewsDB: UserMessageViewsDB;
     @inject(UserStorageResourcesDB) protected readonly userStorageResourcesDB: UserStorageResourcesDB;
     @inject(UserDeletionService) protected readonly userDeletionService: UserDeletionService;
+    @inject(IAnalyticsWriter) protected readonly analytics: IAnalyticsWriter;
     @inject(AuthorizationService) protected readonly authorizationService: AuthorizationService;
 
     @inject(AppInstallationDB) protected readonly appInstallationDB: AppInstallationDB;
@@ -104,10 +106,14 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         this.disposables.dispose();
     }
 
-    initialize(client: Client | undefined, clientRegion: string | undefined, user: User, accessGuard: ResourceAccessGuard): void {
+    initialize(client: Client | undefined, clientRegion: string | undefined, user: User, sessionID: string | undefined, accessGuard: ResourceAccessGuard): void {
         if (client) {
             this.disposables.push(Disposable.create(() => this.client = undefined));
         }
+        if (user && sessionID) {
+            this.analytics.identify({ anonymousId: sessionID, userId: user.id });
+        }
+
         this.client = client;
         this.user = user;
         this.clientRegion = clientRegion;

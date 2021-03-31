@@ -58,6 +58,7 @@ export class WebsocketConnectionManager<C extends GitpodClient, S extends Gitpod
         const gitpodServer = this.serverFactory();
         const clientRegion = (expressReq as any).headers["x-glb-client-region"];
         const user = expressReq.user as User;
+        const sessionID = expressReq.sessionID;
 
         let resourceGuard: ResourceAccessGuard;
         let explicitGuard = (expressReq as WithResourceAccessGuard).resourceGuard;
@@ -72,7 +73,7 @@ export class WebsocketConnectionManager<C extends GitpodClient, S extends Gitpod
             resourceGuard = { canAccess: async () => false };
         }
 
-        gitpodServer.initialize(client, clientRegion, user, resourceGuard);
+        gitpodServer.initialize(client, clientRegion, user, sessionID, resourceGuard);
         client.onDidCloseConnection(() => {
             increaseApiConnectionClosedCounter();
             gitpodServer.dispose();

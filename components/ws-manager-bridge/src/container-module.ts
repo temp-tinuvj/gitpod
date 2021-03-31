@@ -17,6 +17,7 @@ import * as path from 'path';
 import { WorkspaceManagerBridgeFactory, WorkspaceManagerBridge } from './bridge';
 import { TracingManager } from '@gitpod/gitpod-protocol/lib/util/tracing';
 import { PrometheusMetricsExporter } from './prometheus-metrics-exporter';
+import { IAnalyticsWriter, newAnalyticsWriterFromEnv } from '@gitpod/gitpod-protocol/lib/util/analytics';
 
 export const containerModule = new ContainerModule(bind => {
 
@@ -54,4 +55,6 @@ export const containerModule = new ContainerModule(bind => {
 
         return result;
     }).inSingletonScope();
+
+    bind(IAnalyticsWriter).toDynamicValue(newAnalyticsWriterFromEnv).inSingletonScope();
 });
