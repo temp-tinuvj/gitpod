@@ -7,6 +7,7 @@ package supervisor
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -27,6 +28,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 
+	"github.com/gitpod-io/gitpod/common-go/analytics"
 	"github.com/gitpod-io/gitpod/common-go/log"
 	"github.com/gitpod-io/gitpod/common-go/pprof"
 	csapi "github.com/gitpod-io/gitpod/content-service/api"
@@ -37,7 +39,6 @@ import (
 	"github.com/gitpod-io/gitpod/supervisor/pkg/dropwriter"
 	"github.com/gitpod-io/gitpod/supervisor/pkg/ports"
 	"github.com/gitpod-io/gitpod/supervisor/pkg/terminal"
-	daemon "github.com/gitpod-io/gitpod/ws-daemon/api"
 
 	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 )
@@ -59,8 +60,7 @@ func AddAPIEndpointOpts(opts ...grpc.ServerOption) {
 }
 
 type runOptions struct {
-	Args        []string
-	InNamespace bool
+	Args []string
 }
 
 // RunOption customizes the run behaviour
@@ -70,13 +70,6 @@ type RunOption func(*runOptions)
 func WithArgs(args []string) RunOption {
 	return func(r *runOptions) {
 		r.Args = args
-	}
-}
-
-// InNamespace pivots to a root filesystem
-func InNamespace() RunOption {
-	return func(ro *runOptions) {
-		ro.InNamespace = true
 	}
 }
 
@@ -145,12 +138,16 @@ func Run(options ...RunOption) {
 			uint32(cfg.IDEPort),
 			uint32(cfg.APIEndpointPort),
 		)
-		termMux     = terminal.NewMux()
-		termMuxSrv  = terminal.NewMuxTerminalService(termMux)
-		taskManager = newTasksManager(cfg, termMuxSrv, cstate, &loggingHeadlessTaskProgressReporter{})
+		termMux             = terminal.NewMux()
+		termMuxSrv          = terminal.NewMuxTerminalService(termMux)
+		taskManager         = newTasksManager(cfg, termMuxSrv, cstate, &loggingHeadlessTaskProgressReporter{})
+		analytics           = analytics.NewFromEnvironment()
+		notificationService = NewNotificationService()
 	)
-	notificationService := NewNotificationService()
 	tokenService.provider[KindGit] = []tokenProvider{NewGitTokenProvider(gitpodService, cfg.WorkspaceConfig, notificationService)}
+
+	defer analytics.Close()
+	go analyseConfigChanges(ctx, cfg, analytics, gitpodConfigService)
 
 	termMuxSrv.DefaultWorkdir = cfg.RepoRoot
 	termMuxSrv.Env = buildIDEEnv(cfg)
@@ -224,10 +221,6 @@ func Run(options ...RunOption) {
 	// terminate all child processes once the IDE is gone
 	ideWG.Wait()
 	terminateChildProcesses()
-
-	if !opts.InNamespace {
-		callDaemonTeardown()
-	}
 
 	wg.Wait()
 }
@@ -742,46 +735,75 @@ func terminateChildProcesses() {
 	}
 }
 
-func callDaemonTeardown() {
-	log.Info("asking ws-daemon to tear down this workspace")
-	ctx, cancel := context.WithTimeout(context.Background(), timeBudgetDaemonTeardown)
-	defer cancel()
-
-	client, conn, err := ConnectToInWorkspaceDaemonService(ctx)
-	if err != nil {
-		log.WithError(err).Error("ungraceful shutdown - teardown was unsuccessful")
-		return
-	}
-
-	defer conn.Close()
-	_, err = client.Teardown(ctx, &daemon.TeardownRequest{})
-	if err != nil {
-		log.WithError(err).Error("ungraceful shutdown - teardown was unsuccessful")
-	}
-}
-
-// ConnectToInWorkspaceDaemonService attempts to connect to the InWorkspaceService offered by the ws-daemon.
-func ConnectToInWorkspaceDaemonService(ctx context.Context) (daemon.InWorkspaceServiceClient, *grpc.ClientConn, error) {
-	const socketFN = "/.workspace/daemon.sock"
-
-	t := time.NewTicker(500 * time.Millisecond)
+func analyseConfigChanges(ctx context.Context, wscfg *Config, w analytics.Writer, cfgobs gitpod.ConfigInterface) {
+	cfgc, errc := cfgobs.Observe(ctx)
+	var (
+		cfg     *gitpod.GitpodConfig
+		t       = time.NewTicker(10 * time.Second)
+		changes []string
+	)
 	defer t.Stop()
+
+	computeHash := func(i interface{}) (string, error) {
+		b, err := json.Marshal(i)
+		if err != nil {
+			return "", err
+		}
+		h := sha256.New()
+		_, err = h.Write(b)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%x", h.Sum(nil)), nil
+	}
+
 	for {
-		if _, err := os.Stat(socketFN); err == nil {
-			break
-		}
-
 		select {
+		case c := <-cfgc:
+			if c == nil {
+				return
+			}
+			if cfg == nil {
+				cfg = c
+				continue
+			}
+
+			pch := []struct {
+				Name string
+				G    func(*gitpod.GitpodConfig) interface{}
+			}{
+				{"ports", func(gc *gitpod.GitpodConfig) interface{} { return gc.Ports }},
+				{"tasks", func(gc *gitpod.GitpodConfig) interface{} { return gc.Tasks }},
+				{"prebuild", func(gc *gitpod.GitpodConfig) interface{} {
+					if gc.Github == nil {
+						return nil
+					}
+					return gc.Github.Prebuilds
+				}},
+			}
+			for _, ch := range pch {
+				prev, _ := computeHash(ch.G(cfg))
+				curr, _ := computeHash(ch.G(c))
+				if prev != curr {
+					changes = append(changes, ch.Name)
+				}
+			}
 		case <-t.C:
-			continue
+			if len(changes) == 0 {
+				continue
+			}
+			w.Track(analytics.TrackMessage{
+				Identity: analytics.Identity{UserID: wscfg.GitEmail},
+				Event:    "config-changed",
+				Properties: map[string]interface{}{
+					"workspaceId": wscfg.WorkspaceID,
+					"changes":     changes,
+				},
+			})
+			changes = nil
+		case <-errc:
 		case <-ctx.Done():
-			return nil, nil, fmt.Errorf("socket did not appear before context was canceled")
+			return
 		}
 	}
-
-	conn, err := grpc.DialContext(ctx, "unix://"+socketFN, grpc.WithInsecure())
-	if err != nil {
-		return nil, nil, err
-	}
-	return daemon.NewInWorkspaceServiceClient(conn), conn, nil
 }

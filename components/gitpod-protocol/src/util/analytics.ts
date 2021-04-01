@@ -27,9 +27,9 @@ export type TrackMessage = Identity & {
 };
 
 export function newAnalyticsWriterFromEnv(): IAnalyticsWriter {
-    switch (process.env.ANALYTICS_WRITER) {
+    switch (process.env.GITPOD_ANALYTICS_WRITER) {
         case "segment":
-            return new SegmentAnalyticsWriter(process.env.SEGMENT_WRITE_KEY || "");
+            return new SegmentAnalyticsWriter(process.env.GITPOD_ANALYTICS_SEGMENT_KEY || "");
         case "log":
             return new LogAnalyticsWriter();
         default:
