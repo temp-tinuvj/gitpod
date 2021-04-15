@@ -13,10 +13,6 @@ variable "location" {
   default = "EU"
 }
 
-variable "name" {
-  type = string
-}
-
 variable "gitpod" {
   type = object({
     namespace = string

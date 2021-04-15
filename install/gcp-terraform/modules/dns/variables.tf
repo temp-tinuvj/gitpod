@@ -19,11 +19,6 @@ variable "name" {
   type = string
 }
 
-variable "subdomain" {
-  type    = string
-  default = "gitpod"
-}
-
 variable "gitpod" {
   type = object({
     namespace = string

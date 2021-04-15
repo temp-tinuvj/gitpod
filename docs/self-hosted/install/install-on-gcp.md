@@ -12,14 +12,6 @@ You need a fresh [Google Cloud project](https://cloud.google.com/resource-manage
 
 Once you have the project, keep its project ID handy.
 
-### Note:
-- This guide assumes you have the [docker](https://docs.docker.com/engine/install/) installed.
-
-- The local mount point `$PWD/gpinstall` will hold your Terraform config files. You can always modify them and re-run the install script in order to make changes to your Gitpod deployment.
-
-- The local mount point `$PWD/gcloud` will cache your Google Cloud credentials. It is safe to delete this folder if you don't wish to leave any tokens behind.
-
-Once the installation process is complete, the script will print the URL at which your Gitpod installation can be accessed.
 
 ## 3. Launch the first workspace
 Once finished, the installer will print the URL at which your Gitpod installation can be found. There you need to connect Gitpod to at least one Git provider:

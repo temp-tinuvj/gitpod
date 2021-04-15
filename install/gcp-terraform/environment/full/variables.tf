@@ -30,22 +30,3 @@ variable "namespace" {
 variable "certificate_email" {
   type = string
 }
-
-variable "license" {
-  type    = string
-  default = ""
-}
-
-variable "database" {
-  type = object({
-    name = string
-  })
-  default = {
-    name = "db"
-  }
-}
-
-variable "subdomain" {
-  type    = string
-  default = "gitpod"
-}

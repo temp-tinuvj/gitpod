@@ -6,9 +6,6 @@ components:
   contentService:
     remoteStorage:
       kind: gcloud
-      backupTrail:
-        enabled: true
-        maxLength: 3
       gcloud:
         parallelUpload: 6
         maximumBackupSize: 32212254720 # 30 GiB
@@ -16,13 +13,9 @@ components:
         region: ${region}
         credentialsFile: /credentials/key.json
         tmpdir: /mnt/sync-tmp
-        parallelUpload: 6
 
   wsDaemon:
-    name: "ws-daemon"
     hostWorkspaceArea: /var/gitpod/workspaces
-    servicePort: 8080
-    workspaceSizeLimit: ""
     containerRuntime:
       runtime: containerd
       containerd:
@@ -32,8 +25,6 @@ components:
     userNamespaces:
       shiftfsModuleLoader:
         enabled: false
-        imageName: "shiftfs-module-loader"
-    registryProxyPort: 8081
     volumes:
     - name: gcloud-creds
       secret:
@@ -57,9 +48,5 @@ components:
     - mountPath: /credentials
       name: gcloud-creds
 
-  server:
-    storage:
-      secretName: ${secretName}
-      keyFilePath: key.json
 minio:
   enabled: false

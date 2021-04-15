@@ -17,10 +17,6 @@ variable "region" {
   type = string
 }
 
-variable "name" {
-  type = string
-}
-
 variable "gitpod" {
   type = object({
     namespace = string
