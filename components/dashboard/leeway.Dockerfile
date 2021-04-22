@@ -3,7 +3,7 @@
 # See License-AGPL.txt in the project root for license information.
 
 
-FROM caddy/caddy:2.4.0-beta.2-alpine
+FROM aledbf/caddy-http2:0.1
 
 COPY components-dashboard--static/conf/Caddyfile /etc/caddy/Caddyfile
 COPY components-dashboard--app/build /www

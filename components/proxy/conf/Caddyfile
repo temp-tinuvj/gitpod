@@ -71,8 +71,6 @@
 (ssl_configuration) {
 	tls /etc/caddy/certificates/tls.crt /etc/caddy/certificates/tls.key {
 		#ca_root   <pem_file>
-		# https://github.com/golang/go/issues/42534
-		alpn http/1.1
 	}
 }
 
