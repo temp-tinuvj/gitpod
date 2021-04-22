@@ -71,6 +71,7 @@
 (ssl_configuration) {
 	tls /etc/caddy/certificates/tls.crt /etc/caddy/certificates/tls.key {
 		#ca_root   <pem_file>
+		alpn http/1.1
 	}
 }
 
