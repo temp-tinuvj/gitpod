@@ -231,7 +231,7 @@ export class WorkspaceStarter {
      *
      * @param workspace the workspace to create an instance for
      */
-    protected async newInstance(workspace: Workspace, user: User): Promise<WorkspaceInstance> {
+    public async newInstance(workspace: Workspace, user: User): Promise<WorkspaceInstance> {
         const theiaVersion = this.env.theiaVersion;
         const ideImage = this.env.ideDefaultImage;
 
@@ -397,6 +397,26 @@ export class WorkspaceStarter {
         }
     }
 
+    public async resolveBaseImage(ctx: TraceContext, user: User, workspace: Workspace, instance: WorkspaceInstance, ignoreBaseImageresolvedAndRebuildBase: boolean = false) {
+        const span = TraceContext.startSpan("resolveBaseImage", ctx);
+
+        try {
+            const client = this.imagebuilderClientProvider.getDefault();
+            const {src, auth} = await this.prepareBuildRequest({ span }, workspace, workspace.imageSource!, user, ignoreBaseImageresolvedAndRebuildBase);
+
+            const req = new BuildRequest();
+            req.setSource(src);
+            req.setAuth(auth);
+
+            return await client.build({ span }, req);
+        } catch (err) {
+            TraceContext.logError({ span }, err);
+            throw err;
+        } finally {
+            span.finish();
+        }
+    }
+
     protected async buildWorkspaceImage(ctx: TraceContext, user: User, workspace: Workspace, instance: WorkspaceInstance, ignoreBaseImageresolvedAndRebuildBase: boolean = false): Promise<WorkspaceInstance> {
         const span = TraceContext.startSpan("buildWorkspaceImage", ctx);
 
@@ -474,7 +494,7 @@ export class WorkspaceStarter {
         }
     }
 
-    protected async createSpec(traceCtx: TraceContext, user: User, workspace: Workspace, instance: WorkspaceInstance, userEnvVars?: UserEnvVarValue[]): Promise<StartWorkspaceSpec> {
+    public async createSpec(traceCtx: TraceContext, user: User, workspace: Workspace, instance: WorkspaceInstance, userEnvVars?: UserEnvVarValue[]): Promise<StartWorkspaceSpec> {
         const context = workspace.context;
 
         let allEnvVars: UserEnvVarValue[] = [];

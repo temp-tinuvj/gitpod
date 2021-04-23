@@ -34,7 +34,8 @@ func (reg *Registry) handleBlob(ctx context.Context, r *http.Request) http.Handl
 			respondWithError(w, distv2.ErrorCodeManifestUnknown)
 		})
 	}
-	spec, err := sp.GetSpec(ctx, name)
+	_, authToken, _ := r.BasicAuth()
+	spec, err := sp.GetSpec(ctx, name, authToken)
 	if err != nil {
 		log.WithError(err).WithField("specProvName", spname).WithField("name", name).Error("cannot get spec")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

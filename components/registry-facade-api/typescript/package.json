@@ -1,0 +1,29 @@
+{
+  "private": true,
+  "name": "@gitpod/registry-facade",
+  "version": "0.1.5",
+  "license": "UNLICENSED",
+  "files": [
+    "client",
+    "lib"
+  ],
+  "scripts": {
+    "build": "mkdir -p lib; tsc && cp -f src/*.js src/*d.ts lib",
+    "watch": "leeway exec --package .:lib --transitive-dependencies --filter-type yarn --components --parallel -- tsc -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@gitpod/content-service": "0.1.5",
+    "@gitpod/gitpod-protocol": "0.1.5",
+    "@grpc/grpc-js": "^1.2.12",
+    "google-protobuf": "^3.15.8",
+    "inversify": "^5.0.1",
+    "opentracing": "^0.14.4"
+  },
+  "devDependencies": {
+    "@types/google-protobuf": "^3.7.4",
+    "@types/node": "^10",
+    "grpc-tools": "^1.11.1",
+    "grpc_tools_node_protoc_ts": "^5.2.1",
+    "typescript-formatter": "^7.2.2"
+  }
+}

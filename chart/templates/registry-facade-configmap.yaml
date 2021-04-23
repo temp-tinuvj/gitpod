@@ -43,8 +43,11 @@ data:
                     "key": "/ws-manager-client-tls-certs/tls.key"
                 }
             },
+            "remoteContextProvider": {
+                "addr": "server:{{ .Values.components.server.ports.ctxprov.containerPort }}"
+            },
             "store": "/mnt/cache/registry",
-            "requireAuth": false,
+            "requireAuth": true,
             "staticLayer": [
                 {
                     "ref": "{{ template "gitpod.comp.imageFull" (dict "root" . "gp" $.Values "comp" .Values.components.workspace.supervisor) }}",

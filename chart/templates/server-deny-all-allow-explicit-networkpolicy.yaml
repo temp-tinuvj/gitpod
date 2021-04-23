@@ -28,6 +28,15 @@ spec:
         matchLabels:
           app: {{ template "gitpod.fullname" . }}
           component: proxy
+  - ports:
+    - protocol: TCP
+      port: {{ .Values.components.server.ports.ctxprov.containerPort }}
+    from:
+    # Allow ingress on port 3000 from component:
+    - podSelector:
+        matchLabels:
+          app: {{ template "gitpod.fullname" . }}
+          component: registry-facade
   # Allow to access health and mornitoring endpoints listening on port 9500
   - ports:
     - protocol: TCP

@@ -12,4 +12,6 @@ const (
 
 	// ProviderPrefixRemote is the image repository prefix for remotely fetched image specs
 	ProviderPrefixRemote = "remote"
+
+	OfflinePrefixRemote = "offline"
 )

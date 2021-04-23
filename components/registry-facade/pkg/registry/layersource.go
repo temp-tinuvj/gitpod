@@ -379,8 +379,9 @@ func NewSpecMappedImageSource(resolver ResolverProvider, refSource RefSource) (*
 
 // SpecMappedImagedSource provides layers from other images based on the image spec
 type SpecMappedImagedSource struct {
-	RefSource RefSource
-	Resolver  ResolverProvider
+	RefSource   RefSource
+	Resolver    ResolverProvider
+	IncludeEnvs bool
 
 	// TODO: add ttl
 	cache *lru.Cache
@@ -392,7 +393,27 @@ func (src *SpecMappedImagedSource) Envs(ctx context.Context, spec *api.ImageSpec
 	if err != nil {
 		return nil, err
 	}
-	return lsrc.Envs(ctx, spec)
+	mod, err := lsrc.Envs(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
+	if !src.IncludeEnvs {
+		return mod, nil
+	}
+
+	for _, e := range spec.EnvironmentVariable {
+		switch e.Mode {
+		case api.EnvVarApplication_APPEND:
+			mod = append(mod, newAppendEnvModifier(e.Name, e.Value))
+		case api.EnvVarApplication_OVERWRITE:
+			mod = append(mod, newSetEnvModifier(e.Name, e.Value))
+		case api.EnvVarApplication_PREPEND:
+			mod = append(mod, newPrependEnvModifier(e.Name, e.Value))
+		case api.EnvVarApplication_SET_IF_NOT_EXISTS:
+			mod = append(mod, newAddEnvModifier(e.Name, e.Value))
+		}
+	}
+	return mod, nil
 }
 
 // GetLayer returns the list of all layers from this source
@@ -589,7 +610,17 @@ func parseEnvs(envs []string) *ParsedEnvs {
 	return &result
 }
 
-// Set the give value as a variable's value of the given name
+// Adds a new environment variable, but ignores the value if the variable already exists
+func (envs *ParsedEnvs) Add(name, value string) {
+	_, exists := envs.values[name]
+	if exists {
+		return
+	}
+	envs.keys = append(envs.keys, name)
+	envs.values[name] = value
+}
+
+// Set the give value as a variable's value of the given name, possibly overwriting an existing value
 func (envs *ParsedEnvs) Set(name, value string) {
 	_, exists := envs.values[name]
 	if !exists {
@@ -629,6 +660,12 @@ func (envs *ParsedEnvs) serialize() (result []string) {
 
 // EnvModifier modifies an image envs configuration
 type EnvModifier func(*ParsedEnvs)
+
+func newAddEnvModifier(name, value string) EnvModifier {
+	return func(pe *ParsedEnvs) {
+		pe.Add(name, value)
+	}
+}
 
 func newSetEnvModifier(name, value string) EnvModifier {
 	return func(pe *ParsedEnvs) {

@@ -3,6 +3,7 @@ syntax = "proto3";
 package registryfacade;
 
 import "imagespec.proto";
+import "content-service-api/initializer.proto";
 
 option go_package = "github.com/gitpod-io/gitpod/registry-facade/api";
 
@@ -11,12 +12,130 @@ service SpecProvider {
     // the spec provider. For example, in case of ws-manager providing the spec, the ID is a
     // workspace instance ID.
     rpc GetImageSpec(GetImageSpecRequest) returns (GetImageSpecResponse) {};
+
+    rpc GetOfflineImageSpec(GetOfflineImageSpecRequest) returns (GetImageSpecResponse) {};
 }
 
 message GetImageSpecRequest {
     string id = 1;
 }
 
+message GetOfflineImageSpecRequest {
+    GetWorkspaceContextResponse req = 1;
+}
+
 message GetImageSpecResponse {
     ImageSpec spec = 1;
+}
+
+service ContextProvider {
+    rpc GetWorkspaceContext(GetWorkspaceContextRequest) returns (GetWorkspaceContextResponse) {};
+}
+
+message GetWorkspaceContextRequest {
+    string context_url = 1;
+}
+
+// StartWorkspaceRequest requests that the workspace manager starts a workspace in its cluster
+message GetWorkspaceContextResponse {
+    // ID is a unique identifier of this workspace. No other workspace with the same name must be managed by this workspace manager
+    string id = 1;
+
+    // service_prefix is the unique ID/name that's prepended before the services associated with a workspace.
+    // For example if the service_prefix is foobar there will be the services foobar-theia and foobar-ports.
+    // If this field is empty the workspace ID becomes the service prefix.
+    string service_prefix = 2;
+
+    // Metadata is data associated with this workspace that's required for other parts of Gitpod to function
+    WorkspaceMetadata metadata = 3;
+
+    // Spec is the configuration of the workspace that's required for the ws-manager to start the workspace
+    StartWorkspaceSpec spec = 4;
+}
+
+// StartWorkspaceSpec specifies the configuration of a workspace for a workspace start
+message StartWorkspaceSpec {
+    // workspace_image is the Docker image name of the workspace container
+    string workspace_image = 1;
+
+    // ide_image is the Docker image name of the IDE image
+    string ide_image = 2;
+
+    // feature_flags provide a means for starting variants of workspaces (e.g. a privileged one)
+    reserved 3;
+
+    // initializer configures how the workspace is to be initialized
+    contentservice.WorkspaceInitializer initializer = 4;
+
+    // ports is the set of ports which ought to be exposed to the internet
+    repeated PortSpec ports = 5;
+
+    // envvars are user-defined environment variables which ought to be available in the workspace
+    repeated EnvironmentVariable envvars = 6;
+
+    // checkout_location describes where the code has been checked out to
+    string checkout_location = 7;
+
+    // workspace_location describes where the workspace root of Theia will be
+    string workspace_location = 8;
+
+    // Git configures the Git user in the workspace
+    GitSpec git = 9;
+
+    // timeout optionally sets a custom workspace timeout
+    string timeout = 10;
+
+    // admission controlls who can access the workspace and its ports.
+    AdmissionLevel admission = 11;
+}
+
+// GitSpec configures the Git available within the workspace
+message GitSpec {
+    // The Git username
+    string username = 1;
+
+    // The Git email address
+    string email = 2;
+}
+
+// PortSpec describes a networking port exposed on a workspace
+message PortSpec {
+    // port is the outward-facing port
+    uint32 port = 1;
+
+    // target is the inward-facing target port
+    uint32 target = 2;
+
+    // visibility defines the visibility of the port
+    PortVisibility visibility = 3;
+
+    // url is the public-facing URL this port is available at
+    string url = 4;
+}
+
+// PortVisibility defines who may access a workspace port which is guarded by an authentication in the proxy
+enum PortVisibility {
+    // private (default) means the port is accessible by the workspace owner only, unless the workspace's admission is
+    // set to everyone.
+    PORT_VISIBILITY_PRIVATE = 0;
+
+    // public means the port is accessible by everybody using the workspace port URL
+    PORT_VISIBILITY_PUBLIC = 1;
+}
+
+enum AdmissionLevel {
+    // WORKSPACE_ADMIT_OWNER_ONLY means the workspace can only be accessed using the owner token
+    ADMIT_OWNER_ONLY = 0;
+
+    // WORKSPACE_ADMIT_EVERYONE means the workspace (including ports) can be accessed by everyone.
+    ADMIT_EVERYONE = 1;
+}
+
+// WorkspaceMetadata is data associated with a workspace that's required for other parts of the system to function
+message WorkspaceMetadata {
+    // owner is the ID of the Gitpod user to whom we'll bill this workspace and who we consider responsible for its content
+    string owner = 1;
+
+    // meta_id is the workspace ID of this currently running workspace instance on the "meta pool" side
+    string meta_id = 2;
 }

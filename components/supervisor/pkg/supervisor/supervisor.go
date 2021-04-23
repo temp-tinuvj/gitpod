@@ -336,6 +336,9 @@ func hasMetadataAccess() bool {
 func reaper(terminatingReaper <-chan bool) {
 	defer log.Debug("reaper shutdown")
 
+	// TODO(cw): reaper seems broken
+	return
+
 	var terminating bool
 	sigs := make(chan os.Signal, 128)
 	signal.Notify(sigs, syscall.SIGCHLD)

@@ -16,3 +16,10 @@ source $ROOT_DIR/scripts/protoc-generator.sh
 
 install_dependencies
 go_protoc $COMPONENTS_DIR
+typescript_protoc $COMPONENTS_DIR
+
+pushd typescript/src
+node $COMPONENTS_DIR/content-service-api/typescript/patch-grpc-js.ts
+popd
+
+update_license

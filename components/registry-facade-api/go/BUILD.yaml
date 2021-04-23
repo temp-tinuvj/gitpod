@@ -5,5 +5,7 @@ packages:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
+    deps:
+      - components/content-service-api/go:lib
     config:
       packaging: library

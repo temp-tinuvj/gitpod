@@ -39,7 +39,10 @@ func (reg *Registry) handleManifest(ctx context.Context, r *http.Request) http.H
 			respondWithError(w, distv2.ErrorCodeManifestUnknown)
 		})
 	}
-	spec, err := sp.GetSpec(ctx, name)
+	_, authToken, _ := r.BasicAuth()
+
+	log.WithField("header", r.Header).Debug("handle manifest")
+	spec, err := sp.GetSpec(ctx, name, authToken)
 	if err != nil {
 		log.WithError(err).WithField("specProvName", spname).WithField("name", name).Error("cannot get spec")
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

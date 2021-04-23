@@ -5,13 +5,13 @@
 {{- $this := dict "root" . "gp" $.Values "comp" $comp -}}
 {{- if not $comp.disabled -}}
 apiVersion: apps/v1
-kind: DaemonSet
+kind: Deployment
 metadata:
   name: registry-facade
   labels:
     app: {{ template "gitpod.fullname" . }}
     component: registry-facade
-    kind: daemonset
+    kind: deployment
     stage: {{ .Values.installation.stage }}
     gitpod.io/nodeService: registry-facade
 spec:
@@ -19,7 +19,7 @@ spec:
     matchLabels:
       app: {{ template "gitpod.fullname" . }}
       component: registry-facade
-      kind: daemonpod
+      kind: pod
       stage: {{ .Values.installation.stage }}
       gitpod.io/nodeService: registry-facade
   template:
@@ -28,7 +28,7 @@ spec:
       labels:
         app: {{ template "gitpod.fullname" . }}
         component: registry-facade
-        kind: daemonpod
+        kind: pod
         stage: {{ .Values.installation.stage }}
         gitpod.io/nodeService: registry-facade
       annotations:
@@ -36,27 +36,9 @@ spec:
         prometheus.io/path: "/metrics"
         prometheus.io/port: '9500'
     spec:
-{{ include "gitpod.workspaceAffinity" $this | indent 6 }}
+{{ include "gitpod.pod.affinity" $this | indent 6 }}
       serviceAccountName: registry-facade
       enableServiceLinks: false
-{{- if $comp.handover.enabled }}
-      initContainers:
-      - name: handover-ownership
-        image: {{ template "gitpod.comp.imageFull" $this }}
-        command:
-        - "/bin/sh"
-        - "-c"
-        - "chown -R 1000:1000 /mnt/handover"
-        volumeMounts:
-        - name: handover
-          mountPath: "/mnt/handover"
-        securityContext:
-          privileged: false
-          runAsUser: 0
-{{- end }}
-      {{- if $comp.handover.enabled }}
-      hostNetwork: true
-      {{- end }}
       containers:
       - name: registry-facade
         image: {{ template "gitpod.comp.imageFull" $this }}
@@ -65,15 +47,10 @@ spec:
 {{ include "gitpod.container.resources" $this | indent 8 }}
         ports:
         - name: registry
-          {{- if $comp.handover.enabled }}
-          # if hostNetwork == true then containerPort == hostPort
-          containerPort: {{ $comp.ports.registry.servicePort }}
-          {{- else }}
           containerPort: {{ $comp.ports.registry.containerPort }}
           hostPort: {{ $comp.ports.registry.servicePort }}
         - name: metrics
           containerPort: 9500
-          {{- end }}
         - name: http
           containerPort: 32224
         securityContext:
@@ -92,10 +69,6 @@ spec:
         - mountPath: /ws-manager-client-tls-certs
           name: ws-manager-client-tls-certs
           readOnly: true
-        {{- if $comp.handover.enabled }}
-        - name: handover
-          mountPath: "/mnt/handover"
-        {{- end }}
         {{- if .Values.components.workspace.pullSecret.secretName }}
         - name: pull-secret
           mountPath: /mnt/pull-secret.json
@@ -114,12 +87,6 @@ spec:
       - name: ws-manager-client-tls-certs
         secret:
           secretName: {{ .Values.components.wsManager.tls.client.secretName }}
-      {{- if $comp.handover.enabled }}
-      - name: handover
-        hostPath:
-          path: {{ $comp.handover.socket | quote }}
-          type: DirectoryOrCreate
-      {{- end }}
       {{- if .Values.components.workspace.pullSecret.secretName }}
       - name: pull-secret
         secret:

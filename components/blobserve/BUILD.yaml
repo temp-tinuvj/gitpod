@@ -10,6 +10,7 @@ packages:
       - components/common-go:lib
       - components/registry-facade-api/go:lib
       - components/registry-facade:lib
+      - components/content-service-api/go:lib
     env:
       - CGO_ENABLED=0
       - GOOS=linux

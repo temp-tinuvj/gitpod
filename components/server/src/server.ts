@@ -39,6 +39,7 @@ import { BearerAuth } from './auth/bearer-authenticator';
 import { HostContextProvider } from './auth/host-context-provider';
 import { CodeSyncService } from './code-sync/code-sync-service';
 import { increaseHttpRequestCounter, observeHttpRequestDuration } from './prometheus-metrics';
+import { RemoteContextProvider } from './workspace/remote-context-provider';
 
 @injectable()
 export class Server<C extends GitpodClient, S extends GitpodServer> {
@@ -67,6 +68,7 @@ export class Server<C extends GitpodClient, S extends GitpodServer> {
     @inject(BearerAuth) protected readonly bearerAuth: BearerAuth;
 
     @inject(HostContextProvider) protected readonly hostCtxProvider: HostContextProvider;
+    @inject(RemoteContextProvider) protected readonly remoteContextProvider: RemoteContextProvider;
 
     protected readonly eventEmitter = new EventEmitter();
     protected app?: express.Application;
@@ -230,6 +232,12 @@ export class Server<C extends GitpodClient, S extends GitpodServer> {
 
         // Start DB updater
         this.startDbDeleter();
+
+        try {
+            await this.remoteContextProvider.startServer("0.0.0.0:14500");
+        } catch (err) {
+            log.error(err, "cannot start remote context provider");
+        }
 
         this.app = app;
         log.info('Initialized');

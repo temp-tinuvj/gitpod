@@ -53,6 +53,14 @@ type Config struct {
 			PrivateKey  string `json:"key"`
 		} `json:"tls,omitempty"`
 	} `json:"remoteSpecProvider,omitempty"`
+	RemoteContextProvider *struct {
+		Addr string `json:"addr"`
+		TLS  *struct {
+			Authority   string `json:"ca"`
+			Certificate string `json:"crt"`
+			PrivateKey  string `json:"key"`
+		} `json:"tls,omitempty"`
+	} `json:"remoteContextProvider,omitempty"`
 	Store       string `json:"store"`
 	RequireAuth bool   `json:"requireAuth"`
 	TLS         *struct {
@@ -185,11 +193,62 @@ func NewRegistry(cfg Config, newResolver ResolverProvider, reg prometheus.Regist
 			opts = append(opts, grpc.WithInsecure())
 		}
 
-		specprov, err := NewCachingSpecProvider(128, NewRemoteSpecProvider(cfg.RemoteSpecProvider.Addr, opts))
+		rspecprov := NewRemoteSpecProvider(cfg.RemoteSpecProvider.Addr, opts)
+		specprov, err := NewCachingSpecProvider(128, rspecprov)
 		if err != nil {
 			return nil, xerrors.Errorf("cannot create caching spec provider: %w", err)
 		}
 		specProvider[api.ProviderPrefixRemote] = specprov
+
+		if cfg.RemoteContextProvider != nil {
+			opts := []grpc.DialOption{
+				grpc.WithUnaryInterceptor(grpc_opentracing.UnaryClientInterceptor(grpc_opentracing.WithTracer(opentracing.GlobalTracer()))),
+				grpc.WithStreamInterceptor(grpc_opentracing.StreamClientInterceptor(grpc_opentracing.WithTracer(opentracing.GlobalTracer()))),
+			}
+
+			if cfg.RemoteContextProvider.TLS != nil {
+				ca := cfg.RemoteContextProvider.TLS.Authority
+				crt := cfg.RemoteContextProvider.TLS.Certificate
+				key := cfg.RemoteContextProvider.TLS.PrivateKey
+
+				// Telepresence (used for debugging only) requires special paths to load files from
+				if root := os.Getenv("TELEPRESENCE_ROOT"); root != "" {
+					ca = filepath.Join(root, ca)
+					crt = filepath.Join(root, crt)
+					key = filepath.Join(root, key)
+				}
+
+				rootCA, err := os.ReadFile(ca)
+				if err != nil {
+					return nil, xerrors.Errorf("could not read ca certificate: %s", err)
+				}
+				certPool := x509.NewCertPool()
+				if ok := certPool.AppendCertsFromPEM(rootCA); !ok {
+					return nil, xerrors.Errorf("failed to append ca certs")
+				}
+
+				certificate, err := tls.LoadX509KeyPair(crt, key)
+				if err != nil {
+					log.WithField("config", cfg.TLS).Error("Cannot load ws-manager certs - this is a configuration issue.")
+					return nil, xerrors.Errorf("cannot load ws-manager certs: %w", err)
+				}
+
+				creds := credentials.NewTLS(&tls.Config{
+					Certificates: []tls.Certificate{certificate},
+					RootCAs:      certPool,
+				})
+				opts = append(opts, grpc.WithTransportCredentials(creds))
+			} else {
+				opts = append(opts, grpc.WithInsecure())
+			}
+
+			ctxprov := NewOfflineSpecProvider(rspecprov, cfg.RemoteContextProvider.Addr, opts)
+			cctxprov, err := NewCachingSpecProvider(128, ctxprov)
+			if err != nil {
+				return nil, xerrors.Errorf("cannot create caching spec provider: %w", err)
+			}
+			specProvider[api.OfflinePrefixRemote] = cctxprov
+		}
 	}
 
 	layerSource := CompositeLayerSource(layerSources)

@@ -12,6 +12,10 @@ message ImageSpec {
     string ide_ref = 2;
     // content_layer describe the last few layers which provide the workspace's content
     repeated ContentLayer content_layer = 3;
+    // environment_variable adds env vars to the image
+    repeated EnvironmentVariable environment_variable = 4;
+    // entrypoint command of the container
+    repeated string entrypoint = 5;
 }
 
 // ContentLayer is a layer that provides a workspace's content
@@ -47,4 +51,18 @@ message RemoteContentLayer {
 message DirectContentLayer {
     // the bytes of the uncompressed tar file which is served as layer
     bytes content = 1;
+}
+
+// EnvironmentVariable is an env var we ought to apply.
+message EnvironmentVariable {
+    string name = 1;
+    string value = 2;
+    EnvVarApplication mode = 3;
+}
+
+enum EnvVarApplication {
+    SET_IF_NOT_EXISTS = 0;
+    OVERWRITE = 1;
+    APPEND = 2;
+    PREPEND = 3;
 }
